@@ -7,6 +7,17 @@
 (defconstant max-time-til-lunch 240)
 (defconstant time-driving 40)
 
+;;;; STRUCTS
+(defstruct shift
+  tasks
+  time-used
+  empty-space-time
+  meal-taken 0)  
+
+(defstruct state
+  shifts
+  to-assign-tasks)  
+
 ;;;; FUNCS
 (defun task-time(task)
   (- (nth 3 task) (nth 2 task)))
@@ -27,4 +38,10 @@
 
 (defun heuristic (task))
 
-(defun faz-afetacao (tasks))
+(defun faz-afetacao (tasks)
+  (let((initial-state (make-state :shifts '()
+                                  :to-assign-tasks tasks)))
+   (problem (cria-problema (initial-state
+                            (list 'sucessors)
+                            :objetivo? (eq (state-to-assign-tasks initial-state) '())
+                            :heuristica 'heuristic))))
