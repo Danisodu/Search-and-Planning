@@ -23,31 +23,19 @@
 
 
 ;;;; FUNCS
-(defun create-shift()
-   (make-shift :tasks '()
-               :time-used 0
-               :empty-space 0
-               :meal-taken nil))
-
 (defun task-time(task)
   (- (nth 3 task) (nth 2 task)))
 
-(defun add-task-to-shift(task shift)
-  (setf (shift-tasks shift) (cons task (shift-tasks shift))
-        (shift-time-used shift) (+ (task-time task) (shift-time-used shift)))
-  (return-from add-task-to-shift shift))
-
-;not sure if needed yet
 (defun insert-task(position task tasks)
   (return-from insert-task (cons (cons (subseq tasks 0 position) task)
                                  (nthcdr position tasks))))
-
+  
 (defun calc-empty-spaces(task shift))
 
 (defun add-drive-duration?(origin destination end-time)
   (if (/= origin destination)
       (setf end-time (+ end-time drive-duration)))
-  (return-from add-drive-duration? end-time))
+  (return-from add-drive-duration end-time))
 
 (defun is-intersected(new-task prev-task)
   (let((new-task-start-time (nth 2 new-task))
@@ -79,17 +67,18 @@
        (new-task-duration (task-time new-task))
        (tasks (shift-tasks shift))
        (current-shift-duration (shift-time-used shift)))
-    ;check if the task interesects with any of the existing tasks and if the new task doesn't exceed max shift time
     (if (and (not (calc-intersection new-task tasks))
              (< (+ current-shift-duration new-task-duration) max-shift))
         (if (not (shift-meal-taken shift))
-            ;if the new task time + current shift time exceeds time to lunch, then lunch will be made and the task won't be added
-            ;maybe it'd be best to see if there's an empty space where the worker can have lunch so the task can be added as well
             (if (>= (+ current-shift-duration new-task-duration) max-time-til-lunch)
                 (setf (shift-meal-taken shift) 'T
                        (shift-time-used shift) (+ current-shift-duration eat-duration))
-              (setf shift (add-task-to-shift new-task shift)))))
+              (setf (shift-tasks shift) (insert-task new-task-position new-task tasks)
+                    (shift-time-used shift) (+ current-shift-duration new-task-duration)))))
     (return-from check-new-task shift)))
+  ;insert in new position
+  ;increment time used
+  ;calc empty space
 
 (defun sucessors (state))
 
