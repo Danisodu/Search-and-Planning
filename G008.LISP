@@ -41,8 +41,53 @@
 (defun insert-task(position task tasks)
   (return-from insert-task (cons (cons (subseq tasks 0 position) task)
                                  (nthcdr position tasks))))
+								 
+								 
+	
 
-(defun calc-empty-spaces(task shift))
+	
+;;;empty-space-two-tasks: task x task -> integer
+;; Calculates the IDLE time between two tasks			 
+(defun empty-space-two-tasks(t1 t2)
+	(- (nth 2 t2) (nth 3 t1) )
+)
+
+;;;calc-empty-spaces: shift -> inteiro
+;; Receives a shift (sorted) and returns the max. interval between tasks (without driving)
+;; Caso a lista seja vazia esta a devolver o tempo maximo de um turno (max-shift)
+;; Caso a lista so tenha um elemento esta a devolver max-shift - tempo desse turno
+;; Para os casos normais (len >= 2) devolve o tamanho do maior "buraco")
+(defun calc-empty-spaces(shift)
+	(let ((max-space 0) 
+			(tasks (shift-tasks shift))
+			(current)
+			(next)
+			(space)) 
+
+		(print tasks)
+		
+		;Special case: If Empty Shift (check if actually needed)
+		(if (eq tasks nil) (return-from calc-empty-spaces max-shift))
+		
+		;Special Case: If only one element (check if actually needed)
+		(if (eq (list-length tasks) 1) (return-from calc-empty-spaces (- max-shift (task-time (nth 0 tasks)))))
+		
+		
+		;Calculate consecutive tasks empty space
+		(loop for i from 0 to (- (list-length tasks) 1) do 
+			(setf current (nth i tasks))
+			(setf next (nth (+ i 1) tasks))
+			(cond (next 
+						(setf space (empty-space-two-tasks current next))
+						(print space)
+						(if (> space max-space) (setf max-space space)))))
+	max-space
+	)
+)
+
+
+
+
 
 (defun add-drive-duration?(origin destination end-time)
   (if (/= origin destination)
