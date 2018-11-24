@@ -44,7 +44,7 @@
 
 (defun add-task-to-shift (position task shift)
   (let ((new-tasks-list (insert-task-in-position position
-                                                 task 
+                                                 task
                                                  (shift-tasks shift))))
   (setf (shift-tasks shift) new-tasks-list
         (shift-time-used shift) (calc-shift-time new-tasks-list))))
@@ -55,40 +55,40 @@
   (return-from add-drive-duration? end-time))
 
 ;;;empty-space-two-tasks: task x task -> integer
-;; Calculates the IDLE time between two tasks			 
+;; Calculates the IDLE time between two tasks
 (defun empty-space-two-tasks (t1 t2)
-  (- (nth 2 t2) 
+  (- (nth 2 t2)
      (add-drive-duration? (nth 1 t1)
                           (nth 0 t2)
                           (nth 3 t1)))
 )
 
 (defun calc-1st-empty-space(last-task)
-  (let((1st-empty-space-start-time (- (nth 3 last-task) 
+  (let((1st-empty-space-start-time (- (nth 3 last-task)
                     max-shift))
        (1st-empty-space (list L1 L1 nil)))
   (if (< 1st-empty-space-start-time 0)
       (setf 1st-empty-space-start-time 0))
-    (nconc 1st-empty-space 
+    (nconc 1st-empty-space
            (list 1st-empty-space-start-time))))
 
 (defun has-space-to-lunch (tasks)
   (let ((first-task (nth 0 tasks))
-        (tasks (cons (calc-1st-empty-space (nth (1- (length tasks)) tasks)) 
+        (tasks (cons (calc-1st-empty-space (nth (1- (length tasks)) tasks))
                      tasks))
         (pos 0)
         (current)
         (next)
         (shift-time 0))
-    (loop while (and (<= pos 
+    (loop while (and (<= pos
                         (- (length tasks) 2))
                      (<= shift-time max-time-til-lunch)) do
         (setf current (nth pos tasks)
               next (nth (1+ pos) tasks)
               pos (1+ pos))
-        (setf shift-time (calc-shift-time (list first-task 
+        (setf shift-time (calc-shift-time (list first-task
                                                 next)))
-        (if (>= (empty-space-two-tasks current 
+        (if (>= (empty-space-two-tasks current
                                        next)
                 eat-duration)
             (return-from has-space-to-lunch 'T)))))
@@ -150,7 +150,7 @@
 (defun update-sucessors-lst(shifts state sucessors)
   (setf (state-shifts state) shifts)
   (nconc sucessors (list state)))
-                       
+
 (defun sucessors (state)
   (let ((next-task (pop (state-to-assign-tasks state)))
         (position)
@@ -164,7 +164,7 @@
           (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
                 stte (copy-structure state))
-          (setf position (find-position next-task 
+          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
           (if (>= position 0)
               (progn
@@ -178,8 +178,8 @@
     (setf last-shift (create-shift (list next-task)))
     (if (can-lunch last-shift)
         (update-sucessors-lst (nconc shifts
-                                    (list last-shift)) 
-                              state 
+                                    (list last-shift))
+                              state
                               sucessors))))
 
 (defun heuristic (state))
