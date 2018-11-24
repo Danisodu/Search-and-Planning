@@ -38,17 +38,16 @@
                               position)))
     (if (eq first-sub-seq nil)
         (setf first-sub-seq '()))
-  (return-from insert-task-in-position (nconc (nconc first-sub-seq  
-                                                   (list task))
-                                             (nthcdr position tasks)))))
+  (nconc (nconc first-sub-seq
+                (list task))
+         (nthcdr position tasks))))
 
 (defun add-task-to-shift (position task shift)
   (let ((new-tasks-list (insert-task-in-position position
                                                  task 
                                                  (shift-tasks shift))))
   (setf (shift-tasks shift) new-tasks-list
-        (shift-time-used shift) (calc-shift-time new-tasks-list))
-  (return-from add-task-to-shift shift)))
+        (shift-time-used shift) (calc-shift-time new-tasks-list))))
 
 (defun add-drive-duration? (origin destination end-time)
   (if (/= origin destination)
@@ -64,11 +63,18 @@
                           (nth 3 t1)))
 )
 
-;check if works with 1 task
+(defun calc-1st-empty-space(last-task)
+  (let((1st-empty-space-start-time (- (nth 3 last-task) 
+                    max-shift))
+       (1st-empty-space (list L1 L1 nil)))
+  (if (< 1st-empty-space-start-time 0)
+      (setf 1st-empty-space-start-time 0))
+    (nconc 1st-empty-space 
+           (list 1st-empty-space-start-time))))
+
 (defun has-space-to-lunch (tasks)
   (let ((first-task (nth 0 tasks))
-        (tasks (cons (list L1 L1 nil (- (nth 3 (nth (1- (length tasks)) tasks)) 
-                                        max-shift)) 
+        (tasks (cons (calc-1st-empty-space (nth (1- (length tasks)) tasks)) 
                      tasks))
         (pos 0)
         (current)
@@ -94,7 +100,7 @@
         (first-task (nth 0 tasks))
         (current)
         (next))
-    (setf empty-spaces (list (list (list L1 L1 nil (- (nth 3 last-task) max-shift))
+    (setf empty-spaces (list (list (calc-1st-empty-space last-task)
                                     first-task)))
     (loop for i from 0 to (- (length tasks) 2) do
           (setf current (nth i tasks)
@@ -105,6 +111,13 @@
     (nconc empty-spaces
            (list (list last-task
                  (list L1 L1 (+ (nth 2 first-task) max-shift) nil))))))
+
+(defun can-lunch (shift)
+  (let ((correct 'T))
+    (if (> (shift-time-used shift)
+           max-time-til-lunch)
+        (setf correct (has-space-to-lunch (shift-tasks shift))))
+    (return-from can-lunch correct)))
 
 (defun is-intersected (new-task other-task1 other-task2)
   (let ((new-task-start-time (nth 2 new-task))
@@ -125,44 +138,49 @@
           (> new-task-end-time other2-task-start-time))))
 
 (defun find-position (new-task tasks)
-  (let ((position -1)
-        (empty-spaces (calc-empty-spaces tasks)))
+  (let ((empty-spaces (calc-empty-spaces tasks)))
     (loop for empty-space in empty-spaces and pos from 0 do
-
           (multiple-value-bind(intersected) (is-intersected new-task
                                                             (nth 0 empty-space)
                                                             (nth 1 empty-space))
             (if (not intersected)
                 (return-from find-position pos))))
-  (return-from find-position position)))
+  (return-from find-position -1)))
 
-(defun can-lunch (shift)
-  (let ((correct 'T))
-    (if (>= (shift-time-used shift)
-            max-time-til-lunch)
-        (setf correct (has-space-to-lunch (shift-tasks shift))))
-    (return-from can-lunch correct)))
-
+(defun update-sucessors-lst(shifts state sucessors)
+  (setf (state-shifts state) shifts)
+  (nconc sucessors (list state)))
+                       
 (defun sucessors (state)
   (let ((next-task (pop (state-to-assign-tasks state)))
+        (position)
+        (current-shift)
         (shifts (state-shifts state))
-        (position))
-    (loop for shift in shifts and pos from 0 do
+        (shfts)
+        (stte)
+        (last-shift)
+        (sucessors '()))
+    (loop for pos from 0 to (1- (length shifts)) do
+          (setf current-shift (copy-structure (nth pos shifts))
+                shfts (copy-list shifts)
+                stte (copy-structure state))
           (setf position (find-position next-task 
-                                        (shift-tasks shift)))
+                                        (shift-tasks current-shift)))
           (if (>= position 0)
               (progn
-                (setf shift (add-task-to-shift position
-                                               next-task
-                                               shift))
-                (if (can-lunch shift)
+                (add-task-to-shift position
+                                   next-task
+                                   current-shift)
+                (if (can-lunch current-shift)
                     (progn
-                      (setf (nth pos shifts) shift)
-                      (return-from sucessors shifts))))))
-    (return-from sucessors (nconc shifts
-                                  (create-shift (list next-task))))))
-;verificar se turno é valido
-;atualizar state
+                      (setf (nth pos shfts) current-shift)
+                      (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
+    (setf last-shift (create-shift (list next-task)))
+    (if (can-lunch last-shift)
+        (update-sucessors-lst (nconc shifts
+                                    (list last-shift)) 
+                              state 
+                              sucessors))))
 
 (defun heuristic (state))
 
