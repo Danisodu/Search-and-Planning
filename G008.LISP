@@ -160,6 +160,10 @@
         (stte)
         (last-shift)
         (sucessors '()))
+	
+	;added to check if all nodes are already expanded, if yes return nil
+	(if (eq next-task nil) (return-from sucessors nil))	
+	
     (loop for pos from 0 to (1- (length shifts)) do
           (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
