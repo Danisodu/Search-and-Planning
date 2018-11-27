@@ -50,7 +50,7 @@
         (shift-time-used shift) (calc-shift-time new-tasks-list))))
 
 (defun add-drive-duration? (origin destination end-time)
-  (if (/= origin destination)
+  (if (not (eq origin destination))
       (setf end-time (+ end-time drive-duration)))
   (return-from add-drive-duration? end-time))
 
