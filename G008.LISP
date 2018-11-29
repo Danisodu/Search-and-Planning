@@ -4,7 +4,6 @@
 
 
 ;;;; CONSTANTS
-(defconstant L1 1)
 (defconstant max-shift 480)
 (defconstant max-time-til-lunch 240)
 (defconstant drive-duration 40)
@@ -66,7 +65,7 @@
 (defun calc-1st-empty-space(last-task)
   (let((1st-empty-space-start-time (- (nth 3 last-task)
                     max-shift))
-       (1st-empty-space (list L1 L1 nil)))
+       (1st-empty-space (list 'L1 'L1 nil)))
   (if (< 1st-empty-space-start-time 0)
       (setf 1st-empty-space-start-time 0))
     (nconc 1st-empty-space
@@ -110,7 +109,7 @@
                                           next)))))
     (nconc empty-spaces
            (list (list last-task
-                 (list L1 L1 (+ (nth 2 first-task) max-shift) nil))))))
+                 (list 'L1 'L1 (+ (nth 2 first-task) max-shift) nil))))))
 
 (defun can-lunch (shift)
   (let ((correct 'T))
