@@ -1,5 +1,4 @@
-;(load "procura.lisp")
-
+(load "G008.LISP")
 ;;; 1-samp-aux: estado x problema -> estado
 ;;  recebe um estado e um problema e expande a partir do estado dado de forma aleatoria
 ;;  se encontrar um estado objectivo devolve esse estado, se nao chega ate uma folha nao objectivo e retorna nil
@@ -44,20 +43,33 @@
     )
 )
 
-;TODO: no nosso caso, como uma sondagem iterativa vai logo dar solução, vamos fazer chamadas a sondagem-iterativa 
-;      enquanto houver tempo e guardar o melhor resultado de todas as sondagens para devolver
+;;;multiplas-sondagens-iterativas: problema -> estado (solucao)
+;; recebe um problema e devolve a melhor solucao de todas as sondagens-iterativas feitas ate timeout
 (defun multiplas-sondagens-iterativas (problema)
     (let ((tempo-inicio (get-universal-time))
            (tempo-max-primitido (* 4.5 60)) ;max e 5min, estamos a fazer para 4m30s
            (melhor-resultado nil)
+           (melhor-resultado-custo)
            (resultado-sondagem nil)
+           (resultado-sondagem-custo)
            )
            (loop (while (< (- (get-universal-time) tempo-inicio) tempo-max-primitido))
+           
                 (setf resultado-sondagem (sondagem-iterativa problema))
                 
-                ;TODO: comparar o tempo total do no dado pela sondagem com o melhor atual
-                ;      se for melhor aatualizar o melhor resultado
-                ;      falta funcao que dado um estado, devolve a soma dos custos de cada turno
+                (cond ((equal melhor-resultado nil) 
+                            (setf melhor-resultado resultado-sondagem) 
+                            (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))
+                        )       
+                        (t
+                            (setf resultado-sondagem-custo  (calculate-state-cost resultado-sondagem))
+                            (if (< resultado-sondagem-custo melhor-resultado-custo)
+                                (progn
+                                    (setf melhor-resultado resultado-sondagem) 
+                                    (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))))
+                        )
+                )
+           
             )
             melhor-resultado
     )    
