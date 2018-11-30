@@ -184,6 +184,26 @@
                                     (list last-shift))
                               state
                               sucessors))))
+                              
+                              
+                              
+;;;calculate-state-cost: state -> integer
+;; Receives a state and return the cost of that state, based on the time of each shift
+(defun calculate-state-cost (state)
+    (let ((shifts (state-shifts state))
+          (shift-time)
+          (sum-all-shifts 0)
+         )
+        (dolist (shift shifts)
+            (print shift)
+            (setf shift-time (shift-time-used shift))
+            (if (< shift-time (* 6 60)) (setf shift-time (* 6 60))) ;if less than 6h its considered 6h used
+            (incf sum-all-shifts shift-time)
+         )
+        
+        sum-all-shifts
+    )
+)
 
 (defun heuristic (state))
 
