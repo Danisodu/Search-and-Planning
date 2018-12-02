@@ -211,14 +211,13 @@
     )
 )
 
-(defun equality (s1 s2)
-  (equalp s1 s2))
+(defun heuristic (state))
 
-(defun faz-afetacao (initial-state strategy heuristic)
- (let ((solution nil)
-       (problem (cria-problema initial-state
-                               (list 'sucessors)
-                               :objetivo? (eq (state-to-assign-tasks initial-state) '())
-                               :heuristica heuristic
-                               :estado= 'equality)))
-   (setf solution (car (procura problem strategy)))))
+(defun faz-afetacao (tasks)
+  (let((initial-state (make-state :shifts '()
+                                  :to-assign-tasks tasks)))))
+
+; (problem (cria-problema (initial-state
+;                         (list 'sucessors)
+;                        :objetivo? (eq (state-to-assign-tasks initial-state) '())
+;                        :heuristica 'heuristic))))
