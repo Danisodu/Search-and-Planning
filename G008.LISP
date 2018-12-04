@@ -4,7 +4,7 @@
 (in-package :user)
 
 ;;;;IMPORTS
-(load "procura.lisp")
+(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
 
 
 ;-------------------------------------------------
@@ -336,7 +336,7 @@
   (nconc sucessors (list state)))
 
 (defun sucessors (state)
- (let ((next-task (pop (state-to-assign-tasks state)))
+ (let ((next-task (pop (state-to-assign-tasks (copy-state state))))
         (position)
         (current-shift)
         (shifts (state-shifts state))
@@ -355,6 +355,8 @@
                 stte (copy-state state))
          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
+         (pop (state-to-assign-tasks stte))
+
          (if (>= position 0)
              (progn
                (add-task-to-shift position
@@ -366,15 +368,17 @@
                      (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
 
     ;if it doesn't fit anywhere then a new shift will be created
-    (if (= (length sucessors) 0)
+   (if (= (length sucessors) 0)
         (progn
           (setf last-shift (create-shift (list next-task)))
 
           (if (can-lunch last-shift)
-              (update-sucessors-lst (nconc shifts
-                                           (list last-shift))
-                                    stte
-                                    sucessors))))
+              (if (not (null shifts))
+                  (setf sucessors (update-sucessors-lst (nconc shifts
+                                                               (list last-shift))
+                                        stte
+                                        sucessors))
+                (setf sucessors (create-state (list last-shift) (state-to-assign-tasks state)))))))
     sucessors))
 
 ;;;calculate-state-cost: state -> integer
