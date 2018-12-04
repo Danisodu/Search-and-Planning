@@ -17,7 +17,46 @@
 
 (defstruct state
   shifts
-  to-assign-tasks)
+  to-assign-tasks
+  heuristic-value)
+
+
+;;;; ALGORITHMS
+(defun sort-by-heuristic-value (states)
+  (loop for state in states do
+        (setf (state-heuristic-value state) (shifts-number-heuristic state)))
+
+  (sort states #'< :key #'state-heuristic-value)
+)
+
+(defun ILDS-iteration (state discrepancies depth)
+  (let ((sucessors (sort-by-heuristic-value (sucessors state))))
+    (print "sucessores")
+    (print sucessors)
+ 
+    (if (is-goal state) (return-from ILDS-iteration state))
+
+    (if (and (> discrepancies 0)
+             (> (length sucessors) 1))
+        (ILDS-iteration (nth 1 sucessors) (1- discrepancies) (1- depth)))
+    (if (> depth discrepancies)
+        (ILDS-iteration (car sucessors) discrepancies (1- depth)))
+))
+
+(defun ILDS (problem)
+  (let ((initial-state (problema-estado-inicial problem))
+        (solution '())
+        (discrepancies 0)
+        (depth))
+    (setf depth (length (state-to-assign-tasks initial-state)))
+
+    (loop for k from 0 to depth do
+          (print k)
+          (setf solution (nconc solution (list (ILDS-iteration initial-state discrepancies depth))))
+          (incf discrepancies))
+
+    (return-from ILDS solution))
+)
 
 
 ;;;; FUNCS
@@ -46,7 +85,7 @@
   (let((first-sub-seq (subseq tasks
                               0
                               position)))
-    (if (eq first-sub-seq nil)
+    (if (null first-sub-seq)
         (setf first-sub-seq '()))
   (nconc (nconc first-sub-seq
                 (list task))
@@ -59,8 +98,6 @@
   (setf (shift-tasks shift) new-tasks-list
         (shift-time-used shift) (calc-shift-time new-tasks-list))))
 
-;;;empty-space-two-tasks: task x task -> integer
-;; Calculates the IDLE time between two tasks
 (defun empty-space-two-tasks (t1 t2)
   (- (nth 2 t2)
      (add-drive-duration? (nth 1 t1)
@@ -99,6 +136,7 @@
             (return-from has-space-to-lunch 'T)))))
 
 ;;;list can't be empty
+;;VER LOGO SE PARA ESSE EMPTY SPACE SE DÁ
 (defun calc-empty-spaces (tasks)
   (let ((empty-spaces '())
         (last-task (nth (1- (length tasks)) tasks))
@@ -166,32 +204,35 @@
         (last-shift)
         (sucessors '()))
 	
-	;added to check if all nodes are already expanded, if yes return nil
-	(if (eq next-task nil) (return-from sucessors nil))	
-	
-    (loop for pos from 0 to (1- (length shifts)) do
-          (setf current-shift (copy-structure (nth pos shifts))
+    ;added to check if all nodes are already expanded, if yes return nil
+   (if (null next-task) (return-from sucessors nil))	
+   
+   ;ATE QUANTOS SUCESSORES????????????
+   (loop for pos from 0 to (1- (length shifts)) do
+         (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
                 stte (copy-structure state))
-          (setf position (find-position next-task
+         (setf position (find-position next-task
                                         (shift-tasks current-shift)))
-          (if (>= position 0)
-              (progn
-                (add-task-to-shift position
-                                   next-task
-                                   current-shift)
-                (if (can-lunch current-shift)
-                    (progn
-                      (setf (nth pos shfts) current-shift)
-                      (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
-    (setf last-shift (create-shift (list next-task)))
-    (if (can-lunch last-shift)
-        (update-sucessors-lst (nconc shifts
-                                    (list last-shift))
-                              state
-                              sucessors))))
-                              
-                              
+         (if (>= position 0)
+             (progn
+               (add-task-to-shift position
+                                  next-task
+                                  current-shift)
+               (if (can-lunch current-shift)
+                   (progn
+                     (setf (nth pos shfts) current-shift)
+                     (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
+
+    ;if it doesn't fit anywhere then a new shift will be created
+    (if (= (length sucessors) 0)
+        (progn
+          (setf last-shift (create-shift (list next-task)))
+          (if (can-lunch last-shift)
+              (update-sucessors-lst (nconc shifts
+                                           (list last-shift))
+                                    state
+                                    sucessors))))))
                               
 ;;;calculate-state-cost: state -> integer
 ;; Receives a state and return the cost of that state, based on the time of each shift
@@ -211,13 +252,33 @@
     )
 )
 
-(defun heuristic (state))
+(defun is-goal (state)
+  (eq (length (state-to-assign-tasks state)) 0))
 
-(defun faz-afetacao (tasks)
-  (let((initial-state (make-state :shifts '()
-                                  :to-assign-tasks tasks)))))
+(defun equality (s1 s2)
+  (equalp s1 s2))
 
-; (problem (cria-problema (initial-state
-;                         (list 'sucessors)
-;                        :objetivo? (eq (state-to-assign-tasks initial-state) '())
-;                        :heuristica 'heuristic))))
+(defun faz-afetacao (toAssignTasks strategy)
+ (let ((solution nil)
+       (problem (cria-problema (create-state '() toAssignTasks)
+                               (list 'sucessors)
+                               :objectivo? 'is-goal
+                               :estado= 'equality)))
+
+       (cond ((equal strategy "melhor.abordagem") 
+              )
+             ((equal strategy "a*.melhor.heuristica") 
+              )
+             ((equal strategy "a*.melhor.heuristica.alternativa") 
+              ;(setf (problema-heuristica problem) "")
+              (set solution "(car (procura problem strategy))")
+              )
+             ((equal strategy "sondagem.iterativa") 
+              )
+             ((equal strategy "ILDS") 
+              (setf solution (ILDS problem))
+              )
+             ((equal strategy "abordagem.alternativa") 
+              )
+       )
+ solution))

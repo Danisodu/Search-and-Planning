@@ -1,5 +1,6 @@
 (load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/G008.lisp")
 
+;(sucessors (create-state (list (create-shift '((L1 L1 0 0)))) '((L1 L1 0 4)(L1 L2 5 10))))
 (defun printStatesShifts (lista)
     (print lista)
     (loop for state in lista do
