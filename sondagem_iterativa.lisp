@@ -1,9 +1,10 @@
-(load "G008.LISP")
+;(load "procura.lisp")
+;(load "G008.LISP")
 ;;; 1-samp-aux: estado x problema -> estado
 ;;  recebe um estado e um problema e expande a partir do estado dado de forma aleatoria
 ;;  se encontrar um estado objectivo devolve esse estado, se nao chega ate uma folha nao objectivo e retorna nil
 (defun 1-samp-aux (estado problema)
-    (let ((gera-sucessores (problema-gera-sucessores problema))
+    (let (
           (sucessores)
           (nextStateToExpandIndex)
           (nextStateToExpand)
@@ -12,7 +13,7 @@
           
             
         (if (funcall objectivo? estado) (return-from-l-samp-aux estado))    
-        (setf sucessores (funcall gera-sucessores estado))
+        (setf sucessores (problema-gera-sucessores problema estado))
         
         (cond  ((eq sucessores nil) nil) ;nao e' solucao e e´ folha retornamos nil
                (t (progn 
