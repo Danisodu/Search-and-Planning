@@ -4,7 +4,7 @@
 (in-package :user)
 
 ;;;;IMPORTS
-(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
+(load "procura.lisp")
 
 
 
@@ -67,6 +67,7 @@
         
         (dolist (shift shifts)
             (incf sum-all-shifts (calc-sum-empty-spaces shift)))
+        sum-all-shifts    
     )
 )
         
