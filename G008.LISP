@@ -3,22 +3,24 @@
 
 (in-package :user)
 
-;;;;IMPORTS
+;-------------------------------------------------
+;-----------------------IMPORTS-------------------
+;-------------------------------------------------
 (load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
 
 
-
-
-;;;; CONSTANTS
+;-------------------------------------------------
+;---------------------CONSTANTS-------------------
+;-------------------------------------------------
 (defconstant max-shift 480)
 (defconstant max-time-til-lunch 240)
 (defconstant drive-duration 40)
 (defconstant eat-duration 40)
 
 
-
-
-;;;; STRUCTS
+;------------------------------------------------
+;----------------------STRUCTS-------------------
+;------------------------------------------------
 (defstruct shift
   tasks
   time-used)
@@ -29,9 +31,9 @@
   heuristic-value)
 
 
-
-
-;;;; HEURISTICS 
+;------------------------------------------------
+;---------------------HEURISTICS-----------------
+;------------------------------------------------
  ;;;calc-empty-spaces: shift -> inteiro
 ;; Receives a shift (sorted) and returns the sum of empty spaces between tasks
 (defun calc-sum-empty-spaces(shift)
@@ -40,7 +42,7 @@
         (current)
         (next)
         (space)) 
-        
+     
         ;When using the heuristic this will never happen
         (if (eq tasks nil) (return-from calc-sum-empty-spaces 0))
         
@@ -145,12 +147,9 @@
 )
 
 
-
-
-
-
-
-;;;; ALGORITHMS
+;------------------------------------------------
+;--------------------ALGORITHMS------------------
+;------------------------------------------------
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
         (setf (state-heuristic-value state) (shifts-number-heuristic state)))
@@ -159,11 +158,17 @@
 )
 
 (defun ILDS-iteration (state discrepancies depth)
+   (print state)
   (let ((sucessors (sort-by-heuristic-value (sucessors state))))
-    (print "sucessores")
-    (print sucessors)
+  (print "current state")
+  (print state)
+  (print "sucessores")
+  (print sucessors)
  
-    (if (is-goal state) (return-from ILDS-iteration state))
+    (if (is-goal state)
+        (if (= discrepancies 0)
+            (return-from ILDS-iteration state)
+          (return-from ilds-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucessors) 1))
@@ -175,20 +180,28 @@
 (defun ILDS (problem)
   (let ((initial-state (problema-estado-inicial problem))
         (solution '())
+        (sol)
         (discrepancies 0)
         (depth))
     (setf depth (length (state-to-assign-tasks initial-state)))
 
     (loop for k from 0 to depth do
           (print k)
-          (setf solution (nconc solution (list (ILDS-iteration initial-state discrepancies depth))))
+          (setf sol (ILDS-iteration initial-state discrepancies depth))
+
+          (if (not (null sol))
+              (setf solution (nconc solution (list sol))))
+
           (incf discrepancies))
+    (print "acabou")
 
     (return-from ILDS solution))
 )
 
 
-;;;; FUNCS
+;------------------------------------------------
+;----------------------FUNCS---------------------
+;------------------------------------------------
 (defun add-drive-duration? (origin destination end-time)
   (if (not (eq origin destination))
       (setf end-time (+ end-time drive-duration)))
@@ -332,7 +345,7 @@
         (stte)
         (last-shift)
         (sucessors '()))
-	
+   
     ;added to check if all nodes are already expanded, if yes return nil
    (if (null next-task) (return-from sucessors nil))	
    
@@ -340,7 +353,7 @@
    (loop for pos from 0 to (1- (length shifts)) do
          (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
-                stte (copy-structure state))
+                stte (copy-state state))
          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
          (if (>= position 0)
@@ -352,16 +365,18 @@
                    (progn
                      (setf (nth pos shfts) current-shift)
                      (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
-
+   
     ;if it doesn't fit anywhere then a new shift will be created
     (if (= (length sucessors) 0)
         (progn
           (setf last-shift (create-shift (list next-task)))
+
           (if (can-lunch last-shift)
               (update-sucessors-lst (nconc shifts
                                            (list last-shift))
-                                    state
-                                    sucessors))))))
+                                    stte
+                                    sucessors))))
+    sucessors))
                               
 ;;;calculate-state-cost: state -> integer
 ;; Receives a state and return the cost of that state, based on the time of each shift
@@ -390,9 +405,9 @@
 (defun faz-afetacao (toAssignTasks strategy)
  (let ((solution nil)
        (problem (cria-problema (create-state '() toAssignTasks)
-                               (list 'sucessors)
-                               :objectivo? 'is-goal
-                               :estado= 'equality)))
+                               (list #'sucessors)
+                               :objectivo? #'is-goal
+                               :estado= #'equality)))
 
        (cond ((equal strategy "melhor.abordagem") 
               )

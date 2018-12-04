@@ -1,16 +1,26 @@
 ;;;; Author(s): Group 8
 
-;;;;IMPORTS
+
+(in-package :user)
+
+;-------------------------------------------------
+;-----------------------IMPORTS-------------------
+;-------------------------------------------------
+(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
 
 
-;;;; CONSTANTS
+;-------------------------------------------------
+;---------------------CONSTANTS-------------------
+;-------------------------------------------------
 (defconstant max-shift 480)
 (defconstant max-time-til-lunch 240)
 (defconstant drive-duration 40)
 (defconstant eat-duration 40)
 
 
-;;;; STRUCTS
+;------------------------------------------------
+;----------------------STRUCTS-------------------
+;------------------------------------------------
 (defstruct shift
   tasks
   time-used)
@@ -21,7 +31,125 @@
   heuristic-value)
 
 
-;;;; ALGORITHMS
+;------------------------------------------------
+;---------------------HEURISTICS-----------------
+;------------------------------------------------
+ ;;;calc-empty-spaces: shift -> inteiro
+;; Receives a shift (sorted) and returns the sum of empty spaces between tasks
+(defun calc-sum-empty-spaces(shift)
+    (let ((sum-empty-spaces 0) 
+        (tasks (shift-tasks shift))
+        (current)
+        (next)
+        (space)) 
+     
+        ;When using the heuristic this will never happen
+        (if (eq tasks nil) (return-from calc-sum-empty-spaces 0))
+        
+        ;If only one element there can not be empty spaces
+        (if (eq (list-length tasks) 1) (return-from calc-sum-empty-spaces 0))
+        
+        ;Calculate consecutive tasks empty space
+        (loop for i from 0 to (- (list-length tasks) 1) do 
+            (setf current (nth i tasks))
+            (setf next (nth (+ i 1) tasks))
+            (if next (progn
+                            (setf space (empty-space-two-tasks current next))
+                            (incf sum-empty-spaces space))))
+                            
+        sum-empty-spaces))
+
+
+;;;empty-spaces-heuristic: state -> integer
+;; Calculates the sum of all empty time spaces between consecutive tasks in all state shifts
+(defun empty-spaces-heuristic (state)
+    (let(
+        (shifts (state-shifts state))
+        (sum-all-shifts 0))
+        
+        (dolist (shift shifts)
+            (incf sum-all-shifts (calc-sum-empty-spaces shift)))
+    )
+)
+        
+;-------------------------------------------
+;------------Shifts Number Heuristic--------
+;-------------------------------------------
+(defun shifts-number-heuristic (state)
+    (let(
+        (shifts (state-shifts state)))
+        
+        (list-length shifts)))
+        
+        
+        
+;-------------------------------------------
+;------------Spacial Consecutive Tasks------
+;-------------------------------------------
+;;;spacial-consecutive-tasks? task x task -> boolean
+;; Check if two tasks are spacial consecutive, ie, if t1 ends where t2 starts      
+(defun spacial-consecutive-tasks?(t1 t2)
+    (equal (nth 1 t1) (nth 0 t2) )
+)
+
+(defun starts-in-L1? (shift)
+    (let* ( (tasks (shift-tasks shift))
+            (first-task (first tasks)))
+            
+        (equal (nth 0 first-task) 'L1)))
+
+        
+(defun ends-in-L1? (shift)
+    (let* ( (tasks (shift-tasks shift))
+            (last-task (nth (- (list-length tasks) 1) tasks)))
+    (equal (nth 1 last-task) 'L1)))
+    
+    
+
+;;; Shift -> integer
+;; Calculates the number of all no-service trips needed to guarantee spacial continuity in one shift
+(defun calc-no-service-trips(shift)
+    (let ((sum-no-services-trips 0) 
+        (tasks (shift-tasks shift))
+        (current)
+        (next)
+        ) 
+        
+        ;Empty list has no trips at all, not really going to happen tho...
+        (if (eq tasks nil) (return-from calc-no-service-trips 0))
+        
+        ;Check if trip to start in L1 is needed
+        (if (not (starts-in-L1? shift)) (incf sum-no-services-trips 1))
+        
+        ;Check if trip to end in L1 is needed
+        (if (not (ends-in-L1? shift)) (incf sum-no-services-trips 1))
+
+        ;Calculate needed trips beetwen tasks
+        (loop for i from 0 to (- (list-length tasks) 1) do 
+            (setf current (nth i tasks))
+            (setf next (nth (+ i 1) tasks))
+            (if next 
+                (if (not (spacial-consecutive-tasks? current next)) (incf sum-no-services-trips 1))))
+                            
+        sum-no-services-trips))
+
+
+;;;empty-spaces-heuristic: state -> integer
+;; Calculates the sum of all empty time spaces between consecutive tasks in all state shifts
+(defun consecutive-tasks-heuristic (state)
+    (let(
+        (shifts (state-shifts state))
+        (sum-all-shifts 0))
+        
+        (dolist (shift shifts)
+            (incf sum-all-shifts (calc-no-service-trips shift)))
+    )
+)
+
+
+;------------------------------------------------
+;--------------------ALGORITHMS------------------
+;------------------------------------------------
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
         (setf (state-heuristic-value state) (shifts-number-heuristic state)))
@@ -30,11 +158,16 @@
 )
 
 (defun ILDS-iteration (state discrepancies depth)
-  (let ((sucessors (sort-by-heuristic-value (sucessors state))))
-    (print "sucessores")
-    (print sucessors)
+  (let ((sucessors (sort-by-heuristic-value (sucessors (copy-structure state)))))
+  (print "current state")
+  (print state)
+  (print "sucessores")
+  (print sucessors)
  
-    (if (is-goal state) (return-from ILDS-iteration state))
+    (if (is-goal state)
+        (if (= discrepancies 0)
+            (return-from ILDS-iteration state)
+          (return-from ilds-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucessors) 1))
@@ -46,20 +179,28 @@
 (defun ILDS (problem)
   (let ((initial-state (problema-estado-inicial problem))
         (solution '())
+        (sol)
         (discrepancies 0)
         (depth))
     (setf depth (length (state-to-assign-tasks initial-state)))
 
     (loop for k from 0 to depth do
           (print k)
-          (setf solution (nconc solution (list (ILDS-iteration initial-state discrepancies depth))))
+          (setf sol (ILDS-iteration initial-state discrepancies depth))
+
+          (if (not (null sol))
+              (setf solution (nconc solution (list sol))))
+
           (incf discrepancies))
+    (print "acabou")
 
     (return-from ILDS solution))
 )
 
 
-;;;; FUNCS
+;------------------------------------------------
+;----------------------FUNCS---------------------
+;------------------------------------------------
 (defun add-drive-duration? (origin destination end-time)
   (if (not (eq origin destination))
       (setf end-time (+ end-time drive-duration)))
@@ -80,6 +221,14 @@
 (defun create-state (shifts toAssignTasks)
   (make-state :shifts shifts
               :to-assign-tasks toAssignTasks))
+
+;(defun copy-state(state)
+;  (create-state (state-shifts state) (state-to-assign-tasks state))
+;)
+
+;(defun copy-shift(shift)
+;  (create-shift (shift-tasks shift))
+;)
 
 (defun insert-task-in-position (position task tasks)
   (let((first-sub-seq (subseq tasks
@@ -211,7 +360,7 @@
    (loop for pos from 0 to (1- (length shifts)) do
          (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
-                stte (copy-structure state))
+                stte (copy-state state))
          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
          (if (>= position 0)
@@ -261,9 +410,9 @@
 (defun faz-afetacao (toAssignTasks strategy)
  (let ((solution nil)
        (problem (cria-problema (create-state '() toAssignTasks)
-                               (list 'sucessors)
-                               :objectivo? 'is-goal
-                               :estado= 'equality)))
+                               (list #'sucessors)
+                               :objectivo? #'is-goal
+                               :estado= #'equality)))
 
        (cond ((equal strategy "melhor.abordagem") 
               )
