@@ -336,15 +336,17 @@
   (nconc sucessors (list state)))
 
 (defun sucessors (state)
- (let ((next-task (pop (state-to-assign-tasks (copy-state state))))
+ (let ((next-task (car (state-to-assign-tasks state)))
         (position)
         (current-shift)
         (shifts (state-shifts state))
         (shfts)
+        (state-without-1st-to-assign-task (copy-state state))
         (stte)
         (last-shift)
         (sucessors '()))
-
+   
+   (pop (state-to-assign-tasks state-without-1st-to-assign-task))
     ;added to check if all nodes are already expanded, if yes return nil
    (if (null next-task) (return-from sucessors nil))
 
@@ -352,7 +354,7 @@
    (loop for pos from 0 to (1- (length shifts)) do
          (setf current-shift (copy-structure (nth pos shifts))
                 shfts (copy-list shifts)
-                stte (copy-state state))
+                stte (copy-state state-without-1st-to-assign-task))
          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
          (pop (state-to-assign-tasks stte))
@@ -370,15 +372,17 @@
     ;if it doesn't fit anywhere then a new shift will be created
    (if (= (length sucessors) 0)
         (progn
+
+          
           (setf last-shift (create-shift (list next-task)))
 
           (if (can-lunch last-shift)
               (if (not (null shifts))
                   (setf sucessors (update-sucessors-lst (nconc shifts
                                                                (list last-shift))
-                                        stte
-                                        sucessors))
-                (setf sucessors (create-state (list last-shift) (state-to-assign-tasks state)))))))
+                                                        state-without-1st-to-assign-task
+                                                        sucessors))
+                (setf sucessors (list (create-state (list last-shift) (cdr (state-to-assign-tasks state)))))))))
     sucessors))
 
 ;;;calculate-state-cost: state -> integer
