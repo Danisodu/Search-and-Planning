@@ -157,8 +157,7 @@
 )
 
 (defun ILDS-iteration (state discrepancies depth)
-   (print state)
-  (let ((sucessors (sort-by-heuristic-value (sucessors state))))
+  (let ((cenas '())(sucessors (sort-by-heuristic-value (sucessors state))))
   (print "current state")
   (print state)
   (print "sucessores")
@@ -166,15 +165,15 @@
 
     (if (is-goal state)
         (if (= discrepancies 0)
-            (return-from ILDS-iteration state)
-          (return-from ilds-iteration nil)))
+              (return-from ILDS-iteration state)
+          (return-from ILDS-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucessors) 1))
-        (ILDS-iteration (nth 1 sucessors) (1- discrepancies) (1- depth)))
+        (setf cenas (nconc cenas (ILDS-iteration (nth 1 sucessors) (1- discrepancies) (1- depth)))))
     (if (> depth discrepancies)
-        (ILDS-iteration (car sucessors) discrepancies (1- depth)))
-))
+        (setf cenas (nconc cenas (ILDS-iteration (car sucessors) discrepancies (1- depth)))))
+cenas))
 
 (defun ILDS (problem)
   (let ((initial-state (problema-estado-inicial problem))
@@ -187,12 +186,13 @@
     (loop for k from 0 to depth do
           (print k)
           (setf sol (ILDS-iteration initial-state discrepancies depth))
+          (print "solucao")
+          (print sol)
 
           (if (not (null sol))
               (setf solution (nconc solution (list sol))))
 
           (incf discrepancies))
-    (print "acabou")
 
     (return-from ILDS solution))
 )
@@ -339,7 +339,7 @@
  (let ((next-task (car (state-to-assign-tasks state)))
         (position)
         (current-shift)
-        (shifts (state-shifts state))
+        (shifts (copy-list (state-shifts state)))
         (shfts)
         (state-without-1st-to-assign-task (copy-state state))
         (stte)
@@ -357,7 +357,6 @@
                 stte (copy-state state-without-1st-to-assign-task))
          (setf position (find-position next-task
                                         (shift-tasks current-shift)))
-         (pop (state-to-assign-tasks stte))
 
          (if (>= position 0)
              (progn
