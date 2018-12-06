@@ -5,7 +5,6 @@
 
 ;;;;IMPORTS
 ;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
-(load "procura.lisp")
 
 
 ;-------------------------------------------------------------------------
@@ -89,7 +88,7 @@
           (setf sol (ILDS-iteration (copy-state initial-state) discrepancies depth))
           ;(print "solucao")
           ;(print sol)
-
+          
           (loop for state in sol do
                 (if (< (state-heuristic-value state) solution)
                     (setf solution (state-heuristic-value state)
@@ -181,7 +180,7 @@
   (let ((last-task (nth (1- (length tasks)) tasks))
         (first-task (nth 0 tasks))
         (shift-end))
-
+    
     (setf shift-end (list 'L1 'L1 (+ (nth 2 first-task) max-shift) nil))
 
     (if (and (not (is-intersected last-task new-task))
@@ -204,12 +203,12 @@
        (sucessors '()))
 
    (pop (state-to-assign-tasks state-without-1st-to-assign-task))
-
+    
    (if (null next-task) (return-from sucessors nil))
 
    (loop while (and (< pos (length (state-shifts state)))
                     (< (length sucessors) max-sucessors)) do
-
+ 
          (setf current-shift (copy-structure (nth pos shifts))
                shfts (copy-list shifts)
                stte (copy-state state-without-1st-to-assign-task))
@@ -246,7 +245,7 @@
           (sum-all-shifts 0)
          )
         (dolist (shift shifts)
-            ;(print shift)
+            (print shift)
             (setf shift-time (shift-time-used shift))
             (if (< shift-time (* 6 60)) (setf shift-time (* 6 60))) ;if less than 6h its considered 6h used
             (incf sum-all-shifts shift-time)
@@ -263,7 +262,10 @@
 
 (defun faz-afetacao (toAssignTasks strategy)
  (let ((solution nil)
-       (problem ))
+       (problem (cria-problema (create-state '() toAssignTasks)
+                               (list #'sucessors)
+                               :objectivo? #'is-goal
+                               :estado= #'equality)))
 
        (cond ((equal strategy "melhor.abordagem")
               )
