@@ -38,6 +38,22 @@
 (defun number-to-assign-tasks (state)
   (length (state-to-assign-tasks state)))
 
+  
+(defun number-hours-to-assign (state)
+    (let(
+        (sum-all-hours 0)
+        (to-assign-tasks (state-to-assign-tasks state))
+        (task-duration)
+        )
+        
+        (loop for task in to-assign-tasks do
+            (setf task-duration (- (nth 3 task) (nth 2 task)))
+            (incf sum-all-hours task-duration)
+        )
+        
+        sum-all-hours
+    )
+)
 
 ;-------------------------------------------------------------------------
 ;---------------------------------ALGORITHMS------------------------------
@@ -273,7 +289,7 @@
               )
              ((equal strategy "a*.melhor.heuristica.alternativa")
               ;(setf (problema-heuristica problem) "")
-              (set solution "(car (procura problem strategy))")
+              (setf solution "(car (procura problem strategy))")
               )
              ((equal strategy "sondagem.iterativa")
               )
@@ -316,7 +332,7 @@
  
         ;copy each shift to new from the old 
         (loop for i from 0 to (- (list-length shifts-new) 1) do
-             (setf (nth i shifts-new) (copy-shift-our (nth i shifts-new)))
+             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
         )
         (setf (state-shifts state-new) shifts-new)
 
