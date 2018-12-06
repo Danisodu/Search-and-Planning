@@ -4,7 +4,8 @@
 (in-package :user)
 
 ;;;;IMPORTS
-(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
+;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
+(load "procura.lisp")
 
 
 ;-------------------------------------------------
@@ -392,7 +393,7 @@ cenas))
           (sum-all-shifts 0)
          )
         (dolist (shift shifts)
-            (print shift)
+            ;(print shift)
             (setf shift-time (shift-time-used shift))
             (if (< shift-time (* 6 60)) (setf shift-time (* 6 60))) ;if less than 6h its considered 6h used
             (incf sum-all-shifts shift-time)
