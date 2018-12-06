@@ -187,31 +187,52 @@
              (not (is-intersected new-task shift-end)))
         (return-from fits-in-shift 'T))))
 
-(defun update-sucessors-lst(shifts state sucessors)
-  (setf (state-shifts state) shifts)
-  (nconc sucessors (list state)))
+
+(defun copy-shift (shift-old)
+    (let (
+        (shift-new (copy-structure shift-old))
+        (shift-tasks-copy)
+        )
+        (setf shift-tasks-copy (copy-list (shift-tasks random-shift)))
+        (setf (shift-tasks shift-new) (shift-tasks-copy))
+        shift
+    )
+ )
+ 
+(defun copy-state (state-old)
+    (let (  
+        (state-new (copy-structure state-old))
+        (shifts-new (mapcar #'copy-structure (state-shifts state)))
+        )
+ 
+        (loop for i from 0 to (- (list-length shifts-new) 1) do
+             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
+        )
+        (setf (state-shifts state-new) shifts-new) 
+ 
+        state-new
+ 
+    )
+ )
 
 (defun sucessors (state)
-  (let ((next-task (car (state-to-assign-tasks state)))
-       (current-shift)
-       (shifts (copy-list (state-shifts state)))
-       (shfts)
-       (state-without-1st-to-assign-task (copy-state state))
-       (stte)
-       (pos 0)
-       (new-shift)
-       (sucessors '()))
-
-   (pop (state-to-assign-tasks state-without-1st-to-assign-task))
+  (let* ((state2 (copy-state state))
+         (next-task (pop (state-to-assign-tasks state2)))
+         (current-shift)
+         (shifts (state-shifts state))
+         (shfts)
+         (stte)
+         (pos 0)
+         (new-shift)
+         (sucessors '()))
     
    (if (null next-task) (return-from sucessors nil))
 
-   (loop while (and (< pos (length (state-shifts state)))
+   (loop while (and (< pos (length shifts))
                     (< (length sucessors) max-sucessors)) do
  
-         (setf current-shift (copy-structure (nth pos shifts))
-               shfts (copy-list shifts)
-               stte (copy-state state-without-1st-to-assign-task))
+         (setf current-shift (copy-shift (nth pos shifts))
+               stte (copy-state state2))
 
          (if (fits-in-shift next-task
                             (shift-tasks current-shift))
@@ -220,21 +241,18 @@
 
                (if (can-lunch current-shift)
                    (progn
-                     (setf (nth pos shfts) current-shift)
-                     (setf sucessors (update-sucessors-lst shfts stte sucessors))))))
-           (incf pos))
+                     (setf (nth pos (state-shifts stte)) current-shift)
+                     (setf sucessors (nconc sucessors (list stte)))))))
+
+         (incf pos))
 
    (if (= (length sucessors) 0)
         (progn
           (setf new-shift (create-shift (list next-task)))
 
           (if (can-lunch new-shift)
-              (if (not (null shifts))
-                  (setf sucessors (update-sucessors-lst (nconc shifts
-                                               (list new-shift))
-                                               state-without-1st-to-assign-task
-                                               sucessors))
-                (setf sucessors (list (create-state (list new-shift) (cdr (state-to-assign-tasks state)))))))))
+                  (setf sucessors (nconc (state-shifts state2) (list new-shift))))))
+
    sucessors))
 
 ;;;calculate-state-cost: state -> integer
@@ -284,34 +302,3 @@
               )
        )
  solution))
- 
- 
- 
- (defun copy-shift (shift-old)
-    (let (
-        (shift-new (copy-structure shift-old))
-        (shift-tasks-copy)
-        )
-        (setf shift-tasks-copy (copy-list (shift-tasks random-shift)))
-        (setf (shift-tasks shift-new) (shift-tasks-copy))
-        shift
-    )
- )
- 
- 
- 
- (defun copy-state (state-old)
-    (let (  
-        (state-new (copy-structure state-old))
-        (shifts-new (mapcar #'copy-structure (state-shifts state)))
-        )
- 
-        (loop for i from 0 to (- (list-length shifts-new) 1) do
-             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
-        )
-        (setf (state-shifts state-new) shifts-new) 
- 
-        state-new
- 
-    )
- )
