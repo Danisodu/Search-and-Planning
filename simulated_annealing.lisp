@@ -110,7 +110,7 @@
         (initial-solution (create-random-initial-solution problema))
         (temp 100000) ;min 100000 para dar acceptance-probability=1 na primeira iteracao com cost-change maximo
         (tempo-inicio (get-universal-time))
-        (tempo-max-primitido (* 1 60))
+        (tempo-max-primitido (* 3 60))
         (temp-min 10) ;minimo e' 10 para nao dar overflow em acceptance-probability
         (alpha  0.99) 
         (x-current)
@@ -118,6 +118,8 @@
         (cost-change)
         (acc_prob)
         (iterations 0)
+        (nr-iter-per-temp 10)
+        (temp-it-i 0 )
         ;(cost-scale-down 1)
         )
         
@@ -127,31 +129,38 @@
         (setf x-current initial-solution)
         
         (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (> temp temp-min)) do
-            (setf x-new (neighbour x-current problema))
-             (setf cost-change (- (calculate-state-cost x-new) (calculate-state-cost x-current)))
-            (cond ((<=  cost-change 0)
-                        (setf x-current x-new)
-                   )
-                   (t 
-                        (setf acc_prob (acceptance-probability cost-change temp))
+            (setf temp-it-i 0)  
+            (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (< temp-it-i nr-iter-per-temp)) do
+                (setf x-new (neighbour x-current problema))
+                (setf cost-change (- (calculate-state-cost x-new) (calculate-state-cost x-current)))
+                (cond ((<=  cost-change 0)
+                            (setf x-current x-new)
+                       )
+                       (t 
+                            (setf acc_prob (acceptance-probability cost-change temp))
 
-                        (print "acc_prob:") (print acc_prob)
-                        (if (> acc_prob (random-prob))
-                                (progn 
-                                    (setf x-current x-new)
-                                )
-                         )
-                    )
-                        
+                            (print "acc_prob:") (print acc_prob)
+                            (if (> acc_prob (random-prob))
+                                    (progn 
+                                        (setf x-current x-new)
+                                    )
+                             )
+                        )
+                            
+                )
+                                   
+                (incf iterations)
+                (incf temp-it-i)
+                ;(print "temperatura")
+                ;(print temp)
+                ;(print "acabei")
             )
-                               
+            
             (setf temp (* temp alpha))
-            (incf iterations)
-            ;(print "temperatura")
-            ;(print temp)
-            ;(print "acabei")
+
         )
         (print "iterations:") (print iterations)
+        (print "runtime (s):") (print (- (get-universal-time) tempo-inicio))
         x-current
     )
 )
