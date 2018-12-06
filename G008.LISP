@@ -8,18 +8,20 @@
 (load "procura.lisp")
 
 
-;-------------------------------------------------
-;---------------------CONSTANTS-------------------
-;-------------------------------------------------
+;-------------------------------------------------------------------------
+;----------------------------------CONSTANTS------------------------------
+;-------------------------------------------------------------------------
+
 (defconstant max-shift 480)
 (defconstant max-time-til-lunch 240)
 (defconstant drive-duration 40)
 (defconstant eat-duration 40)
+(defconstant max-sucessors 3)
 
+;-------------------------------------------------------------------------
+;-----------------------------------STRUCTS-------------------------------
+;-------------------------------------------------------------------------
 
-;------------------------------------------------
-;----------------------STRUCTS-------------------
-;------------------------------------------------
 (defstruct shift
   tasks
   time-used)
@@ -30,178 +32,77 @@
   heuristic-value)
 
 
-;------------------------------------------------
-;---------------------HEURISTICS-----------------
-;------------------------------------------------
- ;;;calc-empty-spaces: shift -> inteiro
-;; Receives a shift (sorted) and returns the sum of empty spaces between tasks
-(defun calc-sum-empty-spaces(shift)
-    (let ((sum-empty-spaces 0)
-        (tasks (shift-tasks shift))
-        (current)
-        (next)
-        (space))
+;-------------------------------------------------------------------------
+;---------------------------------HEURISTICS------------------------------
+;-------------------------------------------------------------------------
 
-        ;When using the heuristic this will never happen
-        (if (eq tasks nil) (return-from calc-sum-empty-spaces 0))
-
-        ;If only one element there can not be empty spaces
-        (if (eq (list-length tasks) 1) (return-from calc-sum-empty-spaces 0))
-
-        ;Calculate consecutive tasks empty space
-        (loop for i from 0 to (- (list-length tasks) 1) do
-            (setf current (nth i tasks))
-            (setf next (nth (+ i 1) tasks))
-            (if next (progn
-                            (setf space (empty-space-two-tasks current next))
-                            (incf sum-empty-spaces space))))
-
-        sum-empty-spaces))
+(defun number-to-assign-tasks (state)
+  (length (state-to-assign-tasks state)))
 
 
-;;;empty-spaces-heuristic: state -> integer
-;; Calculates the sum of all empty time spaces between consecutive tasks in all state shifts
-(defun empty-spaces-heuristic (state)
-    (let(
-        (shifts (state-shifts state))
-        (sum-all-shifts 0))
+;-------------------------------------------------------------------------
+;---------------------------------ALGORITHMS------------------------------
+;-------------------------------------------------------------------------
 
-        (dolist (shift shifts)
-            (incf sum-all-shifts (calc-sum-empty-spaces shift)))
-        sum-all-shifts
-    )
-)
+(defun sort-by-time(tasks)
+  (sort tasks #'< :key #'fourth)
+  (sort tasks #'< :key #'third))
 
-;-------------------------------------------
-;------------Shifts Number Heuristic--------
-;-------------------------------------------
-(defun shifts-number-heuristic (state)
-    (let(
-        (shifts (state-shifts state)))
-
-        (list-length shifts)))
-
-
-
-;-------------------------------------------
-;------------Spacial Consecutive Tasks------
-;-------------------------------------------
-;;;spacial-consecutive-tasks? task x task -> boolean
-;; Check if two tasks are spacial consecutive, ie, if t1 ends where t2 starts
-(defun spacial-consecutive-tasks?(t1 t2)
-    (equal (nth 1 t1) (nth 0 t2) )
-)
-
-(defun starts-in-L1? (shift)
-    (let* ( (tasks (shift-tasks shift))
-            (first-task (first tasks)))
-
-        (equal (nth 0 first-task) 'L1)))
-
-
-(defun ends-in-L1? (shift)
-    (let* ( (tasks (shift-tasks shift))
-            (last-task (nth (- (list-length tasks) 1) tasks)))
-    (equal (nth 1 last-task) 'L1)))
-
-
-
-;;; Shift -> integer
-;; Calculates the number of all no-service trips needed to guarantee spacial continuity in one shift
-(defun calc-no-service-trips(shift)
-    (let ((sum-no-services-trips 0)
-        (tasks (shift-tasks shift))
-        (current)
-        (next)
-        )
-
-        ;Empty list has no trips at all, not really going to happen tho...
-        (if (eq tasks nil) (return-from calc-no-service-trips 0))
-
-        ;Check if trip to start in L1 is needed
-        (if (not (starts-in-L1? shift)) (incf sum-no-services-trips 1))
-
-        ;Check if trip to end in L1 is needed
-        (if (not (ends-in-L1? shift)) (incf sum-no-services-trips 1))
-
-        ;Calculate needed trips beetwen tasks
-        (loop for i from 0 to (- (list-length tasks) 1) do
-            (setf current (nth i tasks))
-            (setf next (nth (+ i 1) tasks))
-            (if next
-                (if (not (spacial-consecutive-tasks? current next)) (incf sum-no-services-trips 1))))
-
-        sum-no-services-trips))
-
-
-;;;empty-spaces-heuristic: state -> integer
-;; Calculates the sum of all empty time spaces between consecutive tasks in all state shifts
-(defun consecutive-tasks-heuristic (state)
-    (let(
-        (shifts (state-shifts state))
-        (sum-all-shifts 0))
-
-        (dolist (shift shifts)
-            (incf sum-all-shifts (calc-no-service-trips shift)))
-    )
-)
-
-
-;------------------------------------------------
-;--------------------ALGORITHMS------------------
-;------------------------------------------------
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
-        (setf (state-heuristic-value state) (shifts-number-heuristic state)))
+        (setf (state-heuristic-value state) (+ (number-to-assign-tasks state)
+                                               (calculate-state-cost state))))
 
-  (sort states #'< :key #'state-heuristic-value)
-)
+  (sort states #'< :key #'state-heuristic-value))
 
 (defun ILDS-iteration (state discrepancies depth)
-  (let ((cenas '())(sucessors (sort-by-heuristic-value (sucessors state))))
-  (print "current state")
-  (print state)
-  (print "sucessores")
-  (print sucessors)
-
+  (let ((searches '())
+        (sucss (sort-by-heuristic-value (sucessors state))))
+    (print "state")
+    (print state)
     (if (is-goal state)
         (if (= discrepancies 0)
-              (return-from ILDS-iteration state)
-          (return-from ILDS-iteration nil)))
+              (return-from ILDS-iteration (list state))
+          (return-from ILDS-iteration (list))))
 
     (if (and (> discrepancies 0)
-             (> (length sucessors) 1))
-        (setf cenas (nconc cenas (ILDS-iteration (nth 1 sucessors) (1- discrepancies) (1- depth)))))
+             (> (length sucss) 1))
+        (setf searches (nconc searches (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth)))))
+
     (if (> depth discrepancies)
-        (setf cenas (nconc cenas (ILDS-iteration (car sucessors) discrepancies (1- depth)))))
-cenas))
+        (setf searches (nconc searches (ILDS-iteration (car sucss) discrepancies (1- depth)))))
+
+    searches))
 
 (defun ILDS (problem)
   (let ((initial-state (problema-estado-inicial problem))
-        (solution '())
+        (solution most-positive-fixnum)
         (sol)
         (discrepancies 0)
-        (depth))
+        (depth)
+        (soli))
+
     (setf depth (length (state-to-assign-tasks initial-state)))
 
     (loop for k from 0 to depth do
           (print k)
-          (setf sol (ILDS-iteration initial-state discrepancies depth))
-          (print "solucao")
-          (print sol)
+          (setf sol (ILDS-iteration (copy-state initial-state) discrepancies depth))
+          ;(print "solucao")
+          ;(print sol)
 
-          (if (not (null sol))
-              (setf solution (nconc solution (list sol))))
+          (loop for state in sol do
+                (if (< (state-heuristic-value state) solution)
+                    (setf solution (state-heuristic-value state)
+                          soli state)))
 
           (incf discrepancies))
-
-    (return-from ILDS solution))
-)
+    soli))
 
 
-;------------------------------------------------
-;----------------------FUNCS---------------------
-;------------------------------------------------
+;-------------------------------------------------------------------------
+;---------------------------------FUNCS-----------------------------------
+;-------------------------------------------------------------------------
+
 (defun add-drive-duration? (origin destination end-time)
   (if (not (eq origin destination))
       (setf end-time (+ end-time drive-duration)))
@@ -221,49 +122,29 @@ cenas))
 
 (defun create-state (shifts toAssignTasks)
   (make-state :shifts shifts
-              :to-assign-tasks toAssignTasks))
+              :to-assign-tasks toAssignTasks
+              :heuristic-value most-positive-fixnum))
 
-(defun insert-task-in-position (position task tasks)
-  (let((first-sub-seq (subseq tasks
-                              0
-                              position)))
-    (if (null first-sub-seq)
-        (setf first-sub-seq '()))
-  (nconc (nconc first-sub-seq
-                (list task))
-         (nthcdr position tasks))))
+(defun add-task-to-shift (task shift)
+  (let ((new-tasks-list (nconc (shift-tasks shift) (list task))))
 
-(defun add-task-to-shift (position task shift)
-  (let ((new-tasks-list (insert-task-in-position position
-                                                 task
-                                                 (shift-tasks shift))))
   (setf (shift-tasks shift) new-tasks-list
-        (shift-time-used shift) (calc-shift-time new-tasks-list))))
+        (shift-time-used shift) (calc-shift-time new-tasks-list)))
+)
 
 (defun empty-space-two-tasks (t1 t2)
   (- (nth 2 t2)
      (add-drive-duration? (nth 1 t1)
                           (nth 0 t2)
-                          (nth 3 t1)))
-)
-
-(defun calc-1st-empty-space(last-task)
-  (let((1st-empty-space-start-time (- (nth 3 last-task)
-                    max-shift))
-       (1st-empty-space (list 'L1 'L1 nil)))
-  (if (< 1st-empty-space-start-time 0)
-      (setf 1st-empty-space-start-time 0))
-    (nconc 1st-empty-space
-           (list 1st-empty-space-start-time))))
+                          (nth 3 t1))))
 
 (defun has-space-to-lunch (tasks)
   (let ((first-task (nth 0 tasks))
-        (tasks (cons (calc-1st-empty-space (nth (1- (length tasks)) tasks))
-                     tasks))
         (pos 0)
         (current)
         (next)
         (shift-time 0))
+
     (loop while (and (<= pos
                         (- (length tasks) 2))
                      (<= shift-time max-time-til-lunch)) do
@@ -277,26 +158,6 @@ cenas))
                 eat-duration)
             (return-from has-space-to-lunch 'T)))))
 
-;;;list can't be empty
-;;VER LOGO SE PARA ESSE EMPTY SPACE SE D�
-(defun calc-empty-spaces (tasks)
-  (let ((empty-spaces '())
-        (last-task (nth (1- (length tasks)) tasks))
-        (first-task (nth 0 tasks))
-        (current)
-        (next))
-    (setf empty-spaces (list (list (calc-1st-empty-space last-task)
-                                    first-task)))
-    (loop for i from 0 to (- (length tasks) 2) do
-          (setf current (nth i tasks)
-                next (nth (1+ i) tasks))
-          (setf empty-spaces (nconc empty-spaces
-                                    (list (list current
-                                          next)))))
-    (nconc empty-spaces
-           (list (list last-task
-                 (list 'L1 'L1 (+ (nth 2 first-task) max-shift) nil))))))
-
 (defun can-lunch (shift)
   (let ((correct 'T))
     (if (> (shift-time-used shift)
@@ -304,86 +165,78 @@ cenas))
         (setf correct (has-space-to-lunch (shift-tasks shift))))
     (return-from can-lunch correct)))
 
-(defun is-intersected (new-task other-task1 other-task2)
-  (let ((new-task-start-time (nth 2 new-task))
-        (new-task-end-time (nth 3 new-task))
-        (new-task-origin (nth 0 new-task))
-        (new-task-destination (nth 1 new-task))
-        (other1-task-end-time (nth 3 other-task1))
-        (other1-task-destination (nth 1 other-task1))
-        (other2-task-origin (nth 0 other-task2))
-        (other2-task-start-time (nth 2 other-task2)))
-    (setf other1-task-end-time (add-drive-duration? new-task-origin
-                                                    other1-task-destination
-                                                    other1-task-end-time)
-          new-task-end-time (add-drive-duration? other2-task-origin
-                                                 new-task-destination
-                                                 new-task-end-time))
-      (or (> other1-task-end-time new-task-start-time)
-          (> new-task-end-time other2-task-start-time))))
+(defun is-intersected (task1 task2)
+  (let ((task2-start-time (nth 2 task2))
+        (task2-origin (nth 0 task2))
+        (task1-end-time (nth 3 task1))
+        (task1-destination (nth 1 task1)))
 
-(defun find-position (new-task tasks)
-  (let ((empty-spaces (calc-empty-spaces tasks)))
-    (loop for empty-space in empty-spaces and pos from 0 do
-          (multiple-value-bind(intersected) (is-intersected new-task
-                                                            (nth 0 empty-space)
-                                                            (nth 1 empty-space))
-            (if (not intersected)
-                (return-from find-position pos))))
-  (return-from find-position -1)))
+    (setf task1-end-time (add-drive-duration? task2-origin
+                                              task1-destination
+                                              task1-end-time))
+
+      (> task1-end-time task2-start-time)))
+
+(defun fits-in-shift (new-task tasks)
+  (let ((last-task (nth (1- (length tasks)) tasks))
+        (first-task (nth 0 tasks))
+        (shift-end))
+
+    (setf shift-end (list 'L1 'L1 (+ (nth 2 first-task) max-shift) nil))
+
+    (if (and (not (is-intersected last-task new-task))
+             (not (is-intersected new-task shift-end)))
+        (return-from fits-in-shift 'T))))
 
 (defun update-sucessors-lst(shifts state sucessors)
   (setf (state-shifts state) shifts)
   (nconc sucessors (list state)))
 
 (defun sucessors (state)
- (let ((next-task (car (state-to-assign-tasks state)))
-        (position)
-        (current-shift)
-        (shifts (copy-list (state-shifts state)))
-        (shfts)
-        (state-without-1st-to-assign-task (copy-state state))
-        (stte)
-        (last-shift)
-        (sucessors '()))
-   
+  (let ((next-task (car (state-to-assign-tasks state)))
+       (current-shift)
+       (shifts (copy-list (state-shifts state)))
+       (shfts)
+       (state-without-1st-to-assign-task (copy-state state))
+       (stte)
+       (pos 0)
+       (new-shift)
+       (sucessors '()))
+
    (pop (state-to-assign-tasks state-without-1st-to-assign-task))
-    ;added to check if all nodes are already expanded, if yes return nil
+
    (if (null next-task) (return-from sucessors nil))
 
-   ;ATE QUANTOS SUCESSORES????????????
-   (loop for pos from 0 to (1- (length shifts)) do
-         (setf current-shift (copy-structure (nth pos shifts))
-                shfts (copy-list shifts)
-                stte (copy-state state-without-1st-to-assign-task))
-         (setf position (find-position next-task
-                                        (shift-tasks current-shift)))
+   (loop while (and (< pos (length (state-shifts state)))
+                    (< (length sucessors) max-sucessors)) do
 
-         (if (>= position 0)
+         (setf current-shift (copy-structure (nth pos shifts))
+               shfts (copy-list shifts)
+               stte (copy-state state-without-1st-to-assign-task))
+
+         (if (fits-in-shift next-task
+                            (shift-tasks current-shift))
              (progn
-               (add-task-to-shift position
-                                  next-task
-                                  current-shift)
+               (add-task-to-shift next-task current-shift)
+
                (if (can-lunch current-shift)
                    (progn
                      (setf (nth pos shfts) current-shift)
-                     (setf sucessors (update-sucessors-lst shfts stte sucessors)))))))
+                     (setf sucessors (update-sucessors-lst shfts stte sucessors))))))
+           (incf pos))
 
-    ;if it doesn't fit anywhere then a new shift will be created
    (if (= (length sucessors) 0)
         (progn
+          (setf new-shift (create-shift (list next-task)))
 
-          
-          (setf last-shift (create-shift (list next-task)))
-
-          (if (can-lunch last-shift)
+          (if (can-lunch new-shift)
               (if (not (null shifts))
                   (setf sucessors (update-sucessors-lst (nconc shifts
-                                                               (list last-shift))
-                                                        state-without-1st-to-assign-task
-                                                        sucessors))
-                (setf sucessors (list (create-state (list last-shift) (cdr (state-to-assign-tasks state)))))))))
-    sucessors))
+                                               (list new-shift))
+                                               state-without-1st-to-assign-task
+                                               sucessors))
+                (setf sucessors (list (create-state (list new-shift) (cdr (state-to-assign-tasks state)))))))))
+   sucessors))
 
 ;;;calculate-state-cost: state -> integer
 ;; Receives a state and return the cost of that state, based on the time of each shift
@@ -400,8 +253,7 @@ cenas))
          )
 
         sum-all-shifts
-    )
-)
+    ))
 
 (defun is-goal (state)
   (eq (length (state-to-assign-tasks state)) 0))
@@ -411,10 +263,7 @@ cenas))
 
 (defun faz-afetacao (toAssignTasks strategy)
  (let ((solution nil)
-       (problem (cria-problema (create-state '() toAssignTasks)
-                               (list #'sucessors)
-                               :objectivo? #'is-goal
-                               :estado= #'equality)))
+       (problem ))
 
        (cond ((equal strategy "melhor.abordagem")
               )
