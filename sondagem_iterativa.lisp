@@ -78,7 +78,7 @@
                 )
            
             )
-            (print (- (get-universal-time) tempo-inicio))
+            ;(print (- (get-universal-time) tempo-inicio))
             melhor-resultado
     )    
 
