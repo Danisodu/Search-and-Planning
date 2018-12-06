@@ -261,7 +261,6 @@
           (sum-all-shifts 0)
          )
         (dolist (shift shifts)
-            (print shift)
             (setf shift-time (shift-time-used shift))
             (if (< shift-time (* 6 60)) (setf shift-time (* 6 60))) ;if less than 6h its considered 6h used
             (incf sum-all-shifts shift-time)
@@ -321,8 +320,6 @@
  
  
  (defun copy-state (state-old)
-    (print "entrei")
-           (print (state-shifts state-old))
 
     (let (  
         (state-new (copy-structure state-old)) ;é estrutura
