@@ -284,3 +284,34 @@
               )
        )
  solution))
+ 
+ 
+ 
+ (defun copy-shift (shift-old)
+    (let (
+        (shift-new (copy-structure shift-old))
+        (shift-tasks-copy)
+        )
+        (setf shift-tasks-copy (copy-list (shift-tasks random-shift)))
+        (setf (shift-tasks shift-new) (shift-tasks-copy))
+        shift
+    )
+ )
+ 
+ 
+ 
+ (defun copy-state (state-old)
+    (let (  
+        (state-new (copy-structure state-old))
+        (shifts-new (mapcar #'copy-structure (state-shifts state)))
+        )
+ 
+        (loop for i from 0 to (- (list-length shifts-new) 1) do
+             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
+        )
+        (setf (state-shifts state-new) shifts-new) 
+ 
+        state-new
+ 
+    )
+ )
