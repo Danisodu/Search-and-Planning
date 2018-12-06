@@ -288,28 +288,40 @@
  
  
  (defun copy-shift (shift-old)
+
     (let (
         (shift-new (copy-structure shift-old))
         (shift-tasks-copy)
         )
-        (setf shift-tasks-copy (copy-list (shift-tasks random-shift)))
-        (setf (shift-tasks shift-new) (shift-tasks-copy))
-        shift
+        (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
+
+        (setf (shift-tasks shift-new) shift-tasks-copy)
+        
+        shift-new
+        
     )
  )
  
  
  
  (defun copy-state (state-old)
+    (print "entrei")
+           (print (state-shifts state-old))
+
     (let (  
-        (state-new (copy-structure state-old))
-        (shifts-new (mapcar #'copy-structure (state-shifts state)))
+        (state-new (copy-structure state-old)) ;é estrutura
+        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
+        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old)))
         )
  
+        ;copy each shift to new from the old 
         (loop for i from 0 to (- (list-length shifts-new) 1) do
-             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
+             (setf (nth i shifts-new) (copy-shift-our (nth i shifts-new)))
         )
-        (setf (state-shifts state-new) shifts-new) 
+        (setf (state-shifts state-new) shifts-new)
+
+        ;copy to to-assign-tasks
+        (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
  
         state-new
  
