@@ -88,7 +88,7 @@
           (setf sol (ILDS-iteration (copy-state initial-state) discrepancies depth))
           ;(print "solucao")
           ;(print sol)
-          
+
           (loop for state in sol do
                 (if (< (state-heuristic-value state) solution)
                     (setf solution (state-heuristic-value state)
@@ -180,40 +180,12 @@
   (let ((last-task (nth (1- (length tasks)) tasks))
         (first-task (nth 0 tasks))
         (shift-end))
-    
+
     (setf shift-end (list 'L1 'L1 (+ (nth 2 first-task) max-shift) nil))
 
     (if (and (not (is-intersected last-task new-task))
              (not (is-intersected new-task shift-end)))
         (return-from fits-in-shift 'T))))
-
-
-(defun copy-shift (shift-old)
-    (let (
-        (shift-new (copy-structure shift-old))
-        (shift-tasks-copy)
-        )
-        (setf shift-tasks-copy (copy-list (shift-tasks random-shift)))
-        (setf (shift-tasks shift-new) (shift-tasks-copy))
-        shift
-    )
- )
- 
-(defun copy-state (state-old)
-    (let (  
-        (state-new (copy-structure state-old))
-        (shifts-new (mapcar #'copy-structure (state-shifts state)))
-        )
- 
-        (loop for i from 0 to (- (list-length shifts-new) 1) do
-             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
-        )
-        (setf (state-shifts state-new) shifts-new) 
- 
-        state-new
- 
-    )
- )
 
 (defun sucessors (state)
   (let* ((state2 (copy-state state))
@@ -225,12 +197,12 @@
          (pos 0)
          (new-shift)
          (sucessors '()))
-    
+
    (if (null next-task) (return-from sucessors nil))
 
    (loop while (and (< pos (length shifts))
                     (< (length sucessors) max-sucessors)) do
- 
+
          (setf current-shift (copy-shift (nth pos shifts))
                stte (copy-state state2))
 
@@ -302,3 +274,46 @@
               )
        )
  solution))
+
+
+
+ (defun copy-shift (shift-old)
+
+    (let (
+        (shift-new (copy-structure shift-old))
+        (shift-tasks-copy)
+        )
+        (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
+
+        (setf (shift-tasks shift-new) shift-tasks-copy)
+
+        shift-new
+
+    )
+ )
+
+
+
+ (defun copy-state (state-old)
+    (print "entrei")
+           (print (state-shifts state-old))
+
+    (let (
+        (state-new (copy-structure state-old)) ;é estrutura
+        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
+        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old)))
+        )
+
+        ;copy each shift to new from the old
+        (loop for i from 0 to (- (list-length shifts-new) 1) do
+             (setf (nth i shifts-new) (copy-shift-our (nth i shifts-new)))
+        )
+        (setf (state-shifts state-new) shifts-new)
+
+        ;copy to to-assign-tasks
+        (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
+
+        state-new
+
+    )
+ )
