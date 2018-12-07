@@ -18,8 +18,7 @@
 (defconstant EAT-DURATION 40)
 (defconstant MAX-SUCESSORS 3)
 (defconstant MAX-TIME 270)
-(defvar *CAN_RUN* 'T)
-
+(defconstant MAX-SPACE 262144)
 
 ;-------------------------------------------------------------------------
 ;-----------------------------------STRUCTS-------------------------------
@@ -55,7 +54,6 @@
 
     sum-all-hours))
 
-
 ;-------------------------------------------------------------------------
 ;---------------------------------ALGORITHMS------------------------------
 ;-------------------------------------------------------------------------
@@ -66,25 +64,29 @@
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
         (setf (state-heuristic-value state) (+ (calculate-state-cost state)
-                                               (number-to-assign-tasks state))))
+                                               (number-hours-to-assign state))))
 
   (sort states #'< :key #'state-heuristic-value))
 
-(defun ILDS-iteration (state discrepancies depth)
+(defun ILDS-iteration (state discrepancies depth time)
   (let ((best-discrepancy-res)
         (best-discrepancy-val most-positive-fixnum)
         (res)
         (sucss (sort-by-heuristic-value (sucessors state))))
     
+     (if (>= (- (get-universal-time) time) 
+             MAX-TIME)
+        (return-from ilds-iteration nil))
+    
     (if (is-goal state)
         (if (= discrepancies 0)
               (return-from ILDS-iteration state)
-          (return-from ILDS-iteration nil)))
+          (return-from ilds-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucss) 1))
         (progn
-          (setf res (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth)))
+          (setf res (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth) time))
 
           (if (not (null res))
               (if (< (state-heuristic-value res)
@@ -94,7 +96,7 @@
 
     (if (> depth discrepancies)
         (progn
-          (setf res (ILDS-iteration (car sucss) discrepancies (1- depth)))
+          (setf res (ILDS-iteration (car sucss) discrepancies (1- depth) time))
 
           (if (not (null res))
               (if (< (state-heuristic-value res)
@@ -107,21 +109,23 @@
   (let* ((initial-state (problema-estado-inicial problem))
          (res)
          (discrepancies 0)
-         (depth)
-         (best-solution initial-state))
+         (depth (length (state-to-assign-tasks initial-state)))
+         (best-solution initial-state)
+         (init-time (get-universal-time)))
 
-    (setf depth (length (state-to-assign-tasks initial-state)))
-
-    (loop for k from 0 to depth do
-          (print k)
-          (setf res (ILDS-iteration initial-state discrepancies depth))
+    (loop while (and (<= discrepancies depth)
+                     (< (- (get-universal-time) init-time) 
+                         MAX-TIME)) do
+          (print discrepancies)
+          (setf res (ILDS-iteration initial-state discrepancies depth init-time))
          
           (if (and (not (null res))
                    (< (state-heuristic-value res)
                       (state-heuristic-value best-solution)))
               (progn
                 (setf best-solution res)
-                (print (calculate-state-cost res))
+                (print (length (state-shifts res)))
+                (print (state-heuristic-value res)) 
                 ))
 
           (incf discrepancies))
@@ -132,7 +136,15 @@
 ;-------------------------------------------------------------------------
 ;---------------------------------FUNCS-----------------------------------
 ;-------------------------------------------------------------------------
+(defun get-memory ()
+  (let ((room (with-output-to-string (*standard-output*) (room))))
 
+  (setf room (read-from-string room t nil :start 281))
+  (setf room (string-trim "|" room))
+
+  (multiple-value-bind (x) (parse-integer (string-trim "K" room))
+
+  x)))
 
 (defun final-list (state)
   (let((shifts (state-shifts state)))
@@ -176,7 +188,7 @@
 
 (defun calc-1st-empty-space(last-task)
   (let((1st-empty-space-start-time (- (nth 3 last-task)
-                                      max-shift))
+                                      MAX-SHIFT))
        (1st-empty-space (list 'L1 'L1 nil)))
 
   (if (< 1st-empty-space-start-time 0)
@@ -206,10 +218,10 @@
         (if (>= (empty-space-two-tasks current
                                        next)
                 EAT-DURATION)
-            (return-from has-space-to-lunch 'T)))))
+            (return-from has-space-to-lunch t)))))
 
 (defun can-lunch (shift)
-  (let ((correct 'T))
+  (let ((correct t))
     (if (> (shift-time-used shift)
            max-time-til-lunch)
         (setf correct (has-space-to-lunch (shift-tasks shift))))
