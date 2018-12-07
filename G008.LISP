@@ -5,7 +5,7 @@
 
 ;;;;IMPORTS
 ;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
-
+(load "procura.lisp")
 
 ;-------------------------------------------------------------------------
 ;----------------------------------CONSTANTS------------------------------
@@ -42,71 +42,92 @@
 ;-------------------------------------------------------------------------
 ;---------------------------------ALGORITHMS------------------------------
 ;-------------------------------------------------------------------------
-
 (defun sort-by-time(tasks)
   (sort tasks #'< :key #'fourth)
   (sort tasks #'< :key #'third))
 
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
-        (setf (state-heuristic-value state) (+ (number-to-assign-tasks state)
-                                               (calculate-state-cost state))))
+        (setf (state-heuristic-value state) (+ (calculate-state-cost state) 
+                                              (number-to-assign-tasks state
+))))
 
   (sort states #'< :key #'state-heuristic-value))
 
 (defun ILDS-iteration (state discrepancies depth)
-  (let ((searches '())
+  (let ((best-discrepancy-res)
+        (best-discrepancy-val most-positive-fixnum)
+        (res)
         (sucss (sort-by-heuristic-value (sucessors state))))
-    (print "state")
-    (print state)
+    
     (if (is-goal state)
         (if (= discrepancies 0)
-              (return-from ILDS-iteration (list state))
-          (return-from ILDS-iteration (list))))
+              (return-from ILDS-iteration state)
+          (return-from ILDS-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucss) 1))
-        (setf searches (nconc searches (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth)))))
+        (progn
+          (setf res (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth)))
+
+          (if (not (null res))
+              (if (< (state-heuristic-value res)
+                     best-discrepancy-val)
+                  (setf best-discrepancy-res res
+                        best-discrepancy-val (state-heuristic-value res))))))
 
     (if (> depth discrepancies)
-        (setf searches (nconc searches (ILDS-iteration (car sucss) discrepancies (1- depth)))))
+        (progn
+          (setf res (ILDS-iteration (car sucss) discrepancies (1- depth)))
 
-    searches))
+          (if (not (null res))
+              (if (< (state-heuristic-value res)
+                     best-discrepancy-val)
+                  (setf best-discrepancy-res res
+                        best-discrepancy-val (state-heuristic-value res))))))
+
+    best-discrepancy-res))
 
 (defun ILDS (problem)
-  (let ((initial-state (problema-estado-inicial problem))
-        (solution most-positive-fixnum)
-        (sol)
+  (let* ((initial-state (problema-estado-inicial problem))
+        (res)
         (discrepancies 0)
         (depth)
-        (soli))
+        (best-solution initial-state))
 
     (setf depth (length (state-to-assign-tasks initial-state)))
 
     (loop for k from 0 to depth do
           (print k)
-          (setf sol (ILDS-iteration (copy-state initial-state) discrepancies depth))
-          ;(print "solucao")
-          ;(print sol)
-
-          (loop for state in sol do
-                (if (< (state-heuristic-value state) solution)
-                    (setf solution (state-heuristic-value state)
-                          soli state)))
+          (setf res (ILDS-iteration initial-state discrepancies depth))
+          
+          (print res)
+          
+          (if (and (not (null res))
+                   (< (state-heuristic-value res) 
+                      (state-heuristic-value best-solution)))
+              (setf best-solution res))
 
           (incf discrepancies))
-    soli))
+
+    best-solution))
 
 
 ;-------------------------------------------------------------------------
 ;---------------------------------FUNCS-----------------------------------
 ;-------------------------------------------------------------------------
+(defun final-list (state)
+  (let((shifts (state-shifts state)))
+
+  (loop for shift in shifts collect (shift-tasks shift))))
 
 (defun add-drive-duration? (origin destination end-time)
   (if (not (eq origin destination))
       (setf end-time (+ end-time drive-duration)))
   (return-from add-drive-duration? end-time))
 
+
+;nao contempla a situacao de turnos com menos de 6h
 (defun calc-shift-time (tasks)
   (let ((last-task (nth (1- (length tasks)) tasks))
         (start-time (nth 2 (car tasks))))
@@ -122,14 +143,13 @@
 (defun create-state (shifts toAssignTasks)
   (make-state :shifts shifts
               :to-assign-tasks toAssignTasks
-              :heuristic-value most-positive-fixnum))
+              :heuristic-value (length toAssignTasks)))
 
 (defun add-task-to-shift (task shift)
   (let ((new-tasks-list (nconc (shift-tasks shift) (list task))))
 
   (setf (shift-tasks shift) new-tasks-list
-        (shift-time-used shift) (calc-shift-time new-tasks-list)))
-)
+        (shift-time-used shift) (calc-shift-time new-tasks-list))))
 
 (defun empty-space-two-tasks (t1 t2)
   (- (nth 2 t2)
@@ -187,12 +207,48 @@
              (not (is-intersected new-task shift-end)))
         (return-from fits-in-shift 'T))))
 
+
+ (defun copy-shift (shift-old)
+
+    (let (
+        (shift-new (copy-structure shift-old))
+        (shift-tasks-copy)
+        )
+        (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
+
+        (setf (shift-tasks shift-new) shift-tasks-copy)
+
+        shift-new
+
+    )
+ )
+
+ (defun copy-state (state-old)
+    (let (
+        (state-new (copy-structure state-old)) ;é estrutura
+        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
+        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old)))
+        )
+
+        ;copy each shift to new from the old
+        (loop for i from 0 to (- (list-length shifts-new) 1) do
+             (setf (nth i shifts-new) (copy-shift (nth i shifts-new)))
+        )
+        (setf (state-shifts state-new) shifts-new)
+
+        ;copy to to-assign-tasks
+        (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
+
+        state-new
+
+    )
+ )
+
 (defun sucessors (state)
   (let* ((state2 (copy-state state))
          (next-task (pop (state-to-assign-tasks state2)))
          (current-shift)
          (shifts (state-shifts state))
-         (shfts)
          (stte)
          (pos 0)
          (new-shift)
@@ -223,8 +279,10 @@
           (setf new-shift (create-shift (list next-task)))
 
           (if (can-lunch new-shift)
-                  (setf sucessors (nconc (state-shifts state2) (list new-shift))))))
-
+              (progn
+                (setf (state-shifts state2) (nconc (state-shifts state2) (list new-shift))) 
+                (setf sucessors (list state2))))))
+           
    sucessors))
 
 ;;;calculate-state-cost: state -> integer
@@ -235,7 +293,6 @@
           (sum-all-shifts 0)
          )
         (dolist (shift shifts)
-            (print shift)
             (setf shift-time (shift-time-used shift))
             (if (< shift-time (* 6 60)) (setf shift-time (* 6 60))) ;if less than 6h its considered 6h used
             (incf sum-all-shifts shift-time)
@@ -273,47 +330,5 @@
              ((equal strategy "abordagem.alternativa")
               )
        )
- solution))
 
-
-
- (defun copy-shift (shift-old)
-
-    (let (
-        (shift-new (copy-structure shift-old))
-        (shift-tasks-copy)
-        )
-        (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
-
-        (setf (shift-tasks shift-new) shift-tasks-copy)
-
-        shift-new
-
-    )
- )
-
-
-
- (defun copy-state (state-old)
-    (print "entrei")
-           (print (state-shifts state-old))
-
-    (let (
-        (state-new (copy-structure state-old)) ;é estrutura
-        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
-        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old)))
-        )
-
-        ;copy each shift to new from the old
-        (loop for i from 0 to (- (list-length shifts-new) 1) do
-             (setf (nth i shifts-new) (copy-shift-our (nth i shifts-new)))
-        )
-        (setf (state-shifts state-new) shifts-new)
-
-        ;copy to to-assign-tasks
-        (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
-
-        state-new
-
-    )
- )
+       (final-list solution)))
