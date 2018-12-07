@@ -5,7 +5,7 @@
 
 ;;;;IMPORTS
 ;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
-;(load "procura.lisp")
+(load "procura.lisp")
 
 ;-------------------------------------------------------------------------
 ;----------------------------------CONSTANTS------------------------------
@@ -55,9 +55,34 @@
 
     sum-all-hours))
 
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+;------------------------------ALGORITHMS---------------------------------
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+
 
 ;-------------------------------------------------------------------------
-;---------------------------------ALGORITHMS------------------------------
+;----------------------------------A*-------------------------------------
+;-------------------------------------------------------------------------
+
+;;;re-defining calcula-novo-g from procura.lisp
+(defun calcula-novo-g (estado no-pai custo-transicao)
+  "Calcula o novo valor de g para estado, sendo no-pai o seu pai."
+    (declare (ignore no-pai) (ignore custo-transicao))
+
+    (calculate-state-cost estado)
+
+)
+
+
+
+
+
+
+
+;-------------------------------------------------------------------------
+;---------------------------------ILDS------------------------------------
 ;-------------------------------------------------------------------------
 (defun sort-by-time(tasks)
   (sort tasks #'< :key #'fourth)
@@ -127,7 +152,279 @@
           (incf discrepancies))
 
     best-solution))
+    
+    
+    
+    
+;-------------------------------------------------------------------------
+;------------------------Sondagem Iterativa--------------------------------
+;-------------------------------------------------------------------------
+;;; 1-samp-aux: estado x problema -> estado
+;;  recebe um estado e um problema e expande a partir do estado dado de forma aleatoria
+;;  se encontrar um estado objectivo devolve esse estado, se nao chega ate uma folha nao objectivo e retorna nil
+(defun 1-samp-aux (estado problema tempo-inicio)
+    (let (
+          (sucessores)
+          (nextStateToExpandIndex)
+          (nextStateToExpand)
+          (objectivo? (problema-objectivo? problema))
+          (gera-sucessores (car (problema-operadores problema)))
+          (tempo-max-primitido (* 4.5 60))
+          
+          )
 
+
+        (if (funcall objectivo? estado)  (return-from 1-samp-aux estado))
+        (setf sucessores (funcall gera-sucessores  estado))
+
+        
+        (cond  ((eq sucessores nil) nil) ;nao e' solucao e e´ folha retornamos nil
+               (t (progn 
+                        (if (> (- (get-universal-time) tempo-inicio) tempo-max-primitido) ;if timeout approaching stop
+                                (return-from 1-samp-aux -1)
+                        )
+                        (setf nextStateToExpandIndex (random (list-length sucessores)))
+                        (setf nextStateToExpand (nth nextStateToExpandIndex sucessores))
+                        (1-samp-aux nextStateToExpand problema tempo-inicio)))
+        ) 
+    )
+)  
+;;; 1-samp: problema -> estado ou nil
+;;  faz uma sondagem iterativa a comecar no estado inicial e a escolher sucessores aleatorios ate um estado fronteira
+;;  devolve um estado objectivo ou nil caso nao tenha sido encontrado
+(defun 1-samp (problema tempo-inicio)
+        (let ((estado-inicial (problema-estado-inicial problema)))  
+             (1-samp-aux estado-inicial problema tempo-inicio)))
+
+ 
+;;; sondagem-iterativa: problema -> estado (solucao)
+;;  faz sondagens 1-samp ate que uma das sondagens resulte num estado solucao 
+(defun sondagem-iterativa (problema tempo-inicio)
+
+    (let ((1-samp-res nil))
+    
+        (loop while (not 1-samp-res) do
+            (setf 1-samp-res (1-samp problema tempo-inicio))
+        )
+        
+        1-samp-res
+    )
+)
+
+;;;multiplas-sondagens-iterativas: problema -> estado (solucao)
+;; recebe um problema e devolve a melhor solucao de todas as sondagens-iterativas feitas ate timeout
+(defun multiplas-sondagens-iterativas (problema)
+    (let ((tempo-inicio (get-universal-time))
+           (tempo-max-primitido (* 4.5 60)) ;max e 5min, estamos a fazer para 4m30s
+           (melhor-resultado nil)
+           (melhor-resultado-custo)
+           (resultado-sondagem nil)
+           (resultado-sondagem-custo)
+           (stop nil)
+           )
+           (loop named looper while (or (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (not stop)) do
+           
+                (setf resultado-sondagem (sondagem-iterativa problema tempo-inicio))
+                
+                ;avoid starting something that can not finish at time
+                (if (equal resultado-sondagem -1) (return-from looper))
+                
+                (cond ((equal melhor-resultado nil) 
+                            (setf melhor-resultado resultado-sondagem) 
+                            (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))
+                        )       
+                        (t
+                            (setf resultado-sondagem-custo  (calculate-state-cost resultado-sondagem))
+                            (if (< resultado-sondagem-custo melhor-resultado-custo)
+                                (progn
+                                    (setf melhor-resultado resultado-sondagem) 
+                                    (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))))
+                        )
+                )
+           
+            )
+            melhor-resultado
+    )    
+
+)
+
+
+
+
+;-------------------------------------------------------------------------
+;------------------------Simulated Annealing------------------------------
+;-------------------------------------------------------------------------
+
+
+(defun remove-nth (n list)
+  (declare
+    (type (integer 0) n)
+    (type list list))
+  (if (or (zerop n) (null list))
+    (cdr list)
+    (cons (car list) (remove-nth (1- n) (cdr list)))))
+
+        
+;;; create-random-initial-solution: problema -> estado (solucao)
+;;  usa uma sondagem iterativa para gerar uma solucao valida aleatoria
+(defun create-random-initial-solution (problem tempo-inicio)
+    (sondagem-iterativa problem tempo-inicio)
+)
+
+
+;;; neighbour: state -> state
+;;  Receives a state and returns a state similar to the one received but with a small change
+;;  The change in this case is one random task is moved to a random shift
+
+(defun neighbour(state problema)
+    (let ((shifts (mapcar #'copy-structure (state-shifts state)))
+        (shift-tasks)
+        (random-shift-index)
+        (random-shift)
+        (random-task-index)
+        (random-task)
+        (new-incomplete-state)
+        (sucessores)
+        (gera-sucessores (car (problema-operadores problema)))
+        )
+        ;(print "initial state:")
+        ;(print state)
+        (setf random-shift-index (random (list-length shifts))) ;indice do shift
+                ;(print "random-shift-index:")
+                ;(print random-shift-index)
+                ;(print "shifts:")
+                ;(print shifts)
+        (setf random-shift (copy-structure (nth random-shift-index shifts))) ;estrutura shift
+                ;(print "random-shift:")
+                ;(print random-shift)
+
+        (setf shift-tasks (copy-list (shift-tasks random-shift))) ;lista de shifts da estrutura shit escolhida
+        (setf random-task-index  (- (list-length shift-tasks) 1)) ;
+                        ;(print "random-task-index:")
+                        ;(print random-task-index)
+
+                        ;(print "shift-tasks:")
+                        ;(print shift-tasks)
+        (setf random-task (nth random-task-index shift-tasks))
+        ;Change to-assign-tasks slot
+        (setf new-incomplete-state (copy-structure state))
+
+        (setf (state-to-assign-tasks new-incomplete-state) (push random-task (state-to-assign-tasks new-incomplete-state)))
+        
+        ;Remove random task from the random shift
+                        ;(print "shift-tasks antes:")
+                        ;(print shift-tasks)
+        (setf shift-tasks (remove-nth random-task-index shift-tasks)) ;eliminada tarefa da lista de tasks do shift
+                        ;(print "shift-tasks depois:")
+                        ;(print shift-tasks)
+         
+         
+         
+         (cond ((equal shift-tasks nil)
+                    (setf shifts (remove-nth random-shift-index shifts)) ;se o turno fica sem tasks e' eliminado
+                ) 
+                (t 
+                    (setf (shift-tasks random-shift) shift-tasks) ;atualizar o random-shift com a nova lista de tasks
+                    (setf (shift-time-used random-shift) (calc-shift-time shift-tasks)) ;atualizar o random-shift com novo time-used
+                    (setf (nth random-shift-index shifts) random-shift) ;atualizar a lista de shifts com o alterado random_shift 
+                )
+         )
+         
+        
+        ;Change shifts slot
+        (setf (state-shifts new-incomplete-state) shifts)
+
+       ; (print "new-incomplete-state:")
+        ;(print new-incomplete-state)
+        
+        ;Generate new possible sucessors, from the created "new-incomplete-state"
+        (setf sucessores (funcall gera-sucessores new-incomplete-state))
+
+        ;Select a random sucessor
+            ;(print "sucessores:")
+            ;(print sucessores)
+
+        (nth (random (list-length sucessores)) sucessores)
+    )
+)       
+
+(defun acceptance-probability (cost-change temp)
+    (print "cost-change, temp:") (print cost-change) (print temp)
+    (if (<= cost-change 0) (print "deuuu merdaaa"))
+      (exp ( / (* cost-change -1) temp))
+)
+              
+
+
+(defun random-prob ()
+    ( / (+ (random 100) 1) 100.0)
+)
+    
+    
+(defun simulated_annealing (problema)
+    (let (
+        (initial-solution)
+        (temp 100000) ;min 100000 para dar acceptance-probability=1 na primeira iteracao com cost-change maximo
+        (tempo-inicio (get-universal-time))
+        (tempo-max-primitido (* 4.5 60))
+        (temp-min 10) ;minimo e' 10 para nao dar overflow em acceptance-probability
+        (alpha   0.95) 
+        (x-current)
+        (x-new) 
+        (cost-change)
+        (acc_prob)
+        (iterations 0)
+        (nr-iter-per-temp 3)
+        (temp-it-i 0 )
+        )
+        
+
+        (setf initial-solution (create-random-initial-solution problema tempo-inicio))
+        
+        (setf x-current initial-solution)
+        (print "yoyomano")
+         (print (- (get-universal-time) tempo-inicio))
+        (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (> temp temp-min)) do
+            (setf temp-it-i 0)  
+            (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (< temp-it-i nr-iter-per-temp)) do
+                (setf x-new (neighbour x-current problema))
+                (setf cost-change (- (calculate-state-cost x-new) (calculate-state-cost x-current)))
+                (cond ((<=  cost-change 0)
+                            (setf x-current x-new)
+                       )
+                       (t 
+                            (setf acc_prob (acceptance-probability cost-change temp))
+
+                            (print "acc_prob:") (print acc_prob)
+                            (if (> acc_prob (random-prob))
+                                    (progn 
+                                        (setf x-current x-new)
+                                    )
+                             )
+                        )
+                            
+                )
+                                   
+                (incf iterations)
+                (incf temp-it-i)
+
+            )
+            
+            (setf temp (* temp alpha))
+
+        )
+
+        x-current
+    )
+)
+
+
+
+
+
+
+    
+    
 
 ;-------------------------------------------------------------------------
 ;---------------------------------FUNCS-----------------------------------
@@ -327,21 +624,36 @@
  (let ((problem (cria-problema (create-state '() toAssignTasks)
                                (list #'sucessors)
                                :objectivo? #'is-goal
-                               :estado= #'equality)))
+                               :estado= #'equality))
+      (result))
 
-       (cond ((equal strategy "melhor.abordagem")
+       (cond ((string-equal strategy "melhor.abordagem")
+                ;TODO
               )
-             ((equal strategy "a*.melhor.heuristica")
+             ((string-equal strategy "a*.melhor.heuristica")
+                (setf (problema-heuristica problem) #'number-to-assign-tasks)
+                (setf (problema-custo problem) #'calculate-state-cost)
+                (setf result (last (car (procura problem "a*"))))              
+             )
+             ((string-equal strategy "a*.melhor.heuristica.alternativa")
+                (setf (problema-heuristica problem) #'number-hours-to-assign)
+                (setf (problema-custo problem) #'calculate-state-cost)
+                (setf result (last (car (procura problem "a*"))))
               )
-             ((equal strategy "a*.melhor.heuristica.alternativa")
-              ;(setf (problema-heuristica problem) "")
-              (car (procura problem strategy))
+             ((string-equal strategy "sondagem.iterativa")
+                (setf result (multiplas-sondagens-iterativas problem))
               )
-             ((equal strategy "sondagem.iterativa")
+             ((string-equal strategy "ILDS")
+                (ILDS problem) ;TODO: change ILDS to return a state (that will be converted after this cond
               )
-             ((equal strategy "ILDS")
-              (ILDS problem)
+             ((string-equal strategy "abordagem.alternativa")
+                (setf result (simulated_annealing problem))
               )
-             ((equal strategy "abordagem.alternativa")
-              )
-             (t 'Wrong))))
+             (t 
+                'Wrong)
+        )
+    
+        ;convert to external representation
+        (setf result (final-list result))
+    )
+)
