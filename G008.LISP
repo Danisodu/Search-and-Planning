@@ -4,7 +4,6 @@
 (in-package :user)
 
 ;;;;IMPORTS
-;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
 (load "procura.lisp")
 
 ;-------------------------------------------------------------------------
