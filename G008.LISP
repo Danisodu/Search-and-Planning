@@ -55,6 +55,31 @@
 ;------------------------------ALGORITHMS---------------------------------
 ;-------------------------------------------------------------------------
 
+(defun verify-breaks (shift)
+  (let* ((correct t)
+         (lunch-time)
+         (tasks (shift-tasks shift))
+         (last-task (nth (1- (length tasks)) tasks))
+         (drive-time 0))
+
+    (if (not (eq (nth 1 last-task) 'L1))
+        (setf drive-time drive-duration))
+
+    (if (not (shift-meal-taken shift))
+        (if (> (- (shift-time-used shift) drive-time)
+                MAX-TIME-TIL-BREAK)
+            (progn
+              (setf lunch-time (when-to-lunch tasks))
+
+              (if lunch-time
+                  (setf (shift-meal-taken shift) lunch-time)
+                (setf correct nil))))
+      (if (> (- (nth 3 last-task) (shift-meal-taken shift))
+                 MAX-TIME-TIL-BREAK)
+             (setf correct nil)))
+
+    (return-from verify-breaks correct)))
+
 (defun copy-shift (shift-old)
   (let ((shift-new (copy-structure shift-old))
         (shift-tasks-copy))
@@ -474,30 +499,7 @@
 
     lunch-time))
 
-(defun verify-breaks (shift)
-  (let* ((correct t)
-         (lunch-time)
-         (tasks (shift-tasks shift))
-         (last-task (nth (1- (length tasks)) tasks))
-         (drive-time 0))
 
-    (if (not (eq (nth 1 last-task) 'L1))
-        (setf drive-time drive-duration))
-
-    (if (not (shift-meal-taken shift))
-        (if (> (- (shift-time-used shift) drive-time)
-                MAX-TIME-TIL-BREAK)
-            (progn
-              (setf lunch-time (when-to-lunch tasks))
-
-              (if lunch-time
-                  (setf (shift-meal-taken shift) lunch-time)
-                (setf correct nil))))
-      (if (> (- (nth 3 last-task) (shift-meal-taken shift))
-                 MAX-TIME-TIL-BREAK)
-             (setf correct nil)))
-
-    (return-from verify-breaks correct)))
 
 (defun is-intersected (task1 task2)
   (let ((task2-start-time (nth 2 task2))
