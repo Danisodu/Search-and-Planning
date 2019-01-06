@@ -3,23 +3,17 @@
 
 (in-package :user)
 
-;;;;IMPORTS
-;(load "C:/Users/X541U/OneDrive/IST/Search-and-Planning/procura.lisp")
-(load "procura.lisp")
-
 ;-------------------------------------------------------------------------
 ;----------------------------------CONSTANTS------------------------------
 ;-------------------------------------------------------------------------
 
-
 (defconstant MAX-SHIFT 480)
-(defconstant MAX-TIME-TIL-LUNCH 240)
+(defconstant MAX-TIME-TIL-BREAK 240)
 (defconstant DRIVE-DURATION 40)
 (defconstant EAT-DURATION 40)
 (defconstant MAX-SUCESSORS 3)
 (defconstant MAX-TIME 270)
-(defvar *CAN_RUN* 'T)
-
+(defconstant MAX-SPACE 262144)
 
 ;-------------------------------------------------------------------------
 ;-----------------------------------STRUCTS-------------------------------
@@ -28,7 +22,8 @@
 
 (defstruct shift
   tasks
-  time-used)
+  time-used
+  meal-taken)
 
 (defstruct state
   shifts
@@ -55,35 +50,52 @@
 
     sum-all-hours))
 
-;-------------------------------------------------------------------------
+
 ;-------------------------------------------------------------------------
 ;------------------------------ALGORITHMS---------------------------------
 ;-------------------------------------------------------------------------
-;-------------------------------------------------------------------------
 
+(defun copy-shift (shift-old)
+  (let ((shift-new (copy-structure shift-old))
+        (shift-tasks-copy))
 
-;-------------------------------------------------------------------------
-;----------------------------------A*-------------------------------------
-;-------------------------------------------------------------------------
+    (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
+
+    (setf (shift-tasks shift-new) shift-tasks-copy)
+
+    shift-new))
+
+(defun copy-state (state-old)
+  (let ((state-new (copy-structure state-old))
+        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
+        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old))))
+
+        ;copy each shift to new from the old
+    (loop for i from 0 to (- (list-length shifts-new) 1) do
+          (setf (nth i shifts-new) (copy-shift (nth i shifts-new))))
+
+    (setf (state-shifts state-new) shifts-new)
+
+    ;copy to to-assign-tasks
+    (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
+
+    state-new))
+
+;-----------------------------------------
+;------------------A*---------------------
+;-----------------------------------------
 
 ;;;re-defining calcula-novo-g from procura.lisp
 (defun calcula-novo-g (estado no-pai custo-transicao)
   "Calcula o novo valor de g para estado, sendo no-pai o seu pai."
     (declare (ignore no-pai) (ignore custo-transicao))
 
-    (calculate-state-cost estado)
-
-)
+    (calculate-state-cost estado))
 
 
-
-
-
-
-
-;-------------------------------------------------------------------------
-;---------------------------------ILDS------------------------------------
-;-------------------------------------------------------------------------
+;------------------------------------------
+;----------------ILDS----------------------
+;------------------------------------------
 (defun sort-by-time(tasks)
   (sort tasks #'< :key #'fourth)
   (sort tasks #'< :key #'third))
@@ -91,25 +103,29 @@
 (defun sort-by-heuristic-value (states)
   (loop for state in states do
         (setf (state-heuristic-value state) (+ (calculate-state-cost state)
-                                               (number-to-assign-tasks state))))
+                                               (number-hours-to-assign state))))
 
   (sort states #'< :key #'state-heuristic-value))
 
-(defun ILDS-iteration (state discrepancies depth)
+(defun ILDS-iteration (state discrepancies depth time)
   (let ((best-discrepancy-res)
         (best-discrepancy-val most-positive-fixnum)
         (res)
         (sucss (sort-by-heuristic-value (sucessors state))))
-    
+
+     (if (>= (- (get-universal-time) time)
+             MAX-TIME)
+        (return-from ilds-iteration nil))
+
     (if (is-goal state)
         (if (= discrepancies 0)
               (return-from ILDS-iteration state)
-          (return-from ILDS-iteration nil)))
+          (return-from ilds-iteration nil)))
 
     (if (and (> discrepancies 0)
              (> (length sucss) 1))
         (progn
-          (setf res (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth)))
+          (setf res (ILDS-iteration (nth 1 sucss) (1- discrepancies) (1- depth) time))
 
           (if (not (null res))
               (if (< (state-heuristic-value res)
@@ -119,7 +135,7 @@
 
     (if (> depth discrepancies)
         (progn
-          (setf res (ILDS-iteration (car sucss) discrepancies (1- depth)))
+          (setf res (ILDS-iteration (car sucss) discrepancies (1- depth) time))
 
           (if (not (null res))
               (if (< (state-heuristic-value res)
@@ -132,33 +148,29 @@
   (let* ((initial-state (problema-estado-inicial problem))
          (res)
          (discrepancies 0)
-         (depth)
-         (best-solution initial-state))
+         (depth (length (state-to-assign-tasks initial-state)))
+         (best-solution initial-state)
+         (init-time (get-universal-time)))
 
-    (setf depth (length (state-to-assign-tasks initial-state)))
+    (loop while (and (<= discrepancies depth)
+                     (< (- (get-universal-time) init-time)
+                         MAX-TIME)) do
 
-    (loop for k from 0 to depth do
-          (print k)
-          (setf res (ILDS-iteration initial-state discrepancies depth))
-         
+          (setf res (ILDS-iteration initial-state discrepancies depth init-time))
+
           (if (and (not (null res))
                    (< (state-heuristic-value res)
                       (state-heuristic-value best-solution)))
-              (progn
-                (setf best-solution res)
-                (print (calculate-state-cost res))
-                ))
+                (setf best-solution res))
 
           (incf discrepancies))
 
     best-solution))
-    
-    
-    
-    
-;-------------------------------------------------------------------------
-;------------------------Sondagem Iterativa--------------------------------
-;-------------------------------------------------------------------------
+
+
+;-----------------------------------------
+;----------Sondagem Iterativa-------------
+;-----------------------------------------
 ;;; 1-samp-aux: estado x problema -> estado
 ;;  recebe um estado e um problema e expande a partir do estado dado de forma aleatoria
 ;;  se encontrar um estado objectivo devolve esse estado, se nao chega ate uma folha nao objectivo e retorna nil
@@ -170,43 +182,43 @@
           (objectivo? (problema-objectivo? problema))
           (gera-sucessores (car (problema-operadores problema)))
           (tempo-max-primitido (* 4.5 60))
-          
+
           )
 
 
         (if (funcall objectivo? estado)  (return-from 1-samp-aux estado))
         (setf sucessores (funcall gera-sucessores  estado))
 
-        
+
         (cond  ((eq sucessores nil) nil) ;nao e' solucao e e´ folha retornamos nil
-               (t (progn 
+               (t (progn
                         (if (> (- (get-universal-time) tempo-inicio) tempo-max-primitido) ;if timeout approaching stop
                                 (return-from 1-samp-aux -1)
                         )
                         (setf nextStateToExpandIndex (random (list-length sucessores)))
                         (setf nextStateToExpand (nth nextStateToExpandIndex sucessores))
                         (1-samp-aux nextStateToExpand problema tempo-inicio)))
-        ) 
+        )
     )
-)  
+)
 ;;; 1-samp: problema -> estado ou nil
 ;;  faz uma sondagem iterativa a comecar no estado inicial e a escolher sucessores aleatorios ate um estado fronteira
 ;;  devolve um estado objectivo ou nil caso nao tenha sido encontrado
 (defun 1-samp (problema tempo-inicio)
-        (let ((estado-inicial (problema-estado-inicial problema)))  
+        (let ((estado-inicial (problema-estado-inicial problema)))
              (1-samp-aux estado-inicial problema tempo-inicio)))
 
- 
+
 ;;; sondagem-iterativa: problema -> estado (solucao)
-;;  faz sondagens 1-samp ate que uma das sondagens resulte num estado solucao 
+;;  faz sondagens 1-samp ate que uma das sondagens resulte num estado solucao
 (defun sondagem-iterativa (problema tempo-inicio)
 
     (let ((1-samp-res nil))
-    
+
         (loop while (not 1-samp-res) do
             (setf 1-samp-res (1-samp problema tempo-inicio))
         )
-        
+
         1-samp-res
     )
 )
@@ -223,37 +235,35 @@
            (stop nil)
            )
            (loop named looper while (or (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (not stop)) do
-           
+
                 (setf resultado-sondagem (sondagem-iterativa problema tempo-inicio))
-                
+
                 ;avoid starting something that can not finish at time
                 (if (equal resultado-sondagem -1) (return-from looper))
-                
-                (cond ((equal melhor-resultado nil) 
-                            (setf melhor-resultado resultado-sondagem) 
+
+                (cond ((equal melhor-resultado nil)
+                            (setf melhor-resultado resultado-sondagem)
                             (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))
-                        )       
+                        )
                         (t
                             (setf resultado-sondagem-custo  (calculate-state-cost resultado-sondagem))
                             (if (< resultado-sondagem-custo melhor-resultado-custo)
                                 (progn
-                                    (setf melhor-resultado resultado-sondagem) 
+                                    (setf melhor-resultado resultado-sondagem)
                                     (setf melhor-resultado-custo (calculate-state-cost resultado-sondagem))))
                         )
                 )
-           
+
             )
             melhor-resultado
-    )    
+    )
 
 )
 
 
-
-
-;-------------------------------------------------------------------------
-;------------------------Simulated Annealing------------------------------
-;-------------------------------------------------------------------------
+;-----------------------------------------
+;------------Simulated Annealing----------
+;-----------------------------------------
 
 
 (defun remove-nth (n list)
@@ -264,7 +274,7 @@
     (cdr list)
     (cons (car list) (remove-nth (1- n) (cdr list)))))
 
-        
+
 ;;; create-random-initial-solution: problema -> estado (solucao)
 ;;  usa uma sondagem iterativa para gerar uma solucao valida aleatoria
 (defun create-random-initial-solution (problem tempo-inicio)
@@ -277,7 +287,7 @@
 ;;  The change in this case is one random task is moved to a random shift
 
 (defun neighbour(state problema)
-    (let ((shifts (mapcar #'copy-structure (state-shifts state)))
+    (let ((shifts (mapcar #'copy-shift (state-shifts state)))
         (shift-tasks)
         (random-shift-index)
         (random-shift)
@@ -287,80 +297,51 @@
         (sucessores)
         (gera-sucessores (car (problema-operadores problema)))
         )
-        ;(print "initial state:")
-        ;(print state)
-        (setf random-shift-index (random (list-length shifts))) ;indice do shift
-                ;(print "random-shift-index:")
-                ;(print random-shift-index)
-                ;(print "shifts:")
-                ;(print shifts)
-        (setf random-shift (copy-structure (nth random-shift-index shifts))) ;estrutura shift
-                ;(print "random-shift:")
-                ;(print random-shift)
+       
+        (setf random-shift-index (random (list-length shifts)))               
+        (setf random-shift (copy-shift (nth random-shift-index shifts)))
 
-        (setf shift-tasks (copy-list (shift-tasks random-shift))) ;lista de shifts da estrutura shit escolhida
-        (setf random-task-index  (- (list-length shift-tasks) 1)) ;
-                        ;(print "random-task-index:")
-                        ;(print random-task-index)
-
-                        ;(print "shift-tasks:")
-                        ;(print shift-tasks)
+        (setf shift-tasks (copy-list (shift-tasks random-shift)))
+        (setf random-task-index  (- (list-length shift-tasks) 1))
         (setf random-task (nth random-task-index shift-tasks))
-        ;Change to-assign-tasks slot
-        (setf new-incomplete-state (copy-structure state))
+        (setf new-incomplete-state (copy-state state))
 
         (setf (state-to-assign-tasks new-incomplete-state) (push random-task (state-to-assign-tasks new-incomplete-state)))
-        
-        ;Remove random task from the random shift
-                        ;(print "shift-tasks antes:")
-                        ;(print shift-tasks)
-        (setf shift-tasks (remove-nth random-task-index shift-tasks)) ;eliminada tarefa da lista de tasks do shift
-                        ;(print "shift-tasks depois:")
-                        ;(print shift-tasks)
-         
-         
-         
+
+     
+        (setf shift-tasks (remove-nth random-task-index shift-tasks))
+
          (cond ((equal shift-tasks nil)
-                    (setf shifts (remove-nth random-shift-index shifts)) ;se o turno fica sem tasks e' eliminado
-                ) 
-                (t 
-                    (setf (shift-tasks random-shift) shift-tasks) ;atualizar o random-shift com a nova lista de tasks
-                    (setf (shift-time-used random-shift) (calc-shift-time shift-tasks)) ;atualizar o random-shift com novo time-used
-                    (setf (nth random-shift-index shifts) random-shift) ;atualizar a lista de shifts com o alterado random_shift 
+                    (setf shifts (remove-nth random-shift-index shifts))
+                )
+                (t
+                    (setf (shift-tasks random-shift) shift-tasks)
+                    (setf (shift-time-used random-shift) (calc-shift-time shift-tasks)) 
+                    (setf (nth random-shift-index shifts) random-shift) 
                 )
          )
-         
-        
-        ;Change shifts slot
+
         (setf (state-shifts new-incomplete-state) shifts)
 
-       ; (print "new-incomplete-state:")
-        ;(print new-incomplete-state)
-        
         ;Generate new possible sucessors, from the created "new-incomplete-state"
         (setf sucessores (funcall gera-sucessores new-incomplete-state))
 
         ;Select a random sucessor
-            ;(print "sucessores:")
-            ;(print sucessores)
-
         (nth (random (list-length sucessores)) sucessores)
     )
-)       
+)
 
 (defun acceptance-probability (cost-change temp)
-    (print "cost-change, temp:") (print cost-change) (print temp)
-    (if (<= cost-change 0) (print "deuuu merdaaa"))
       (exp ( / (* cost-change -1) temp))
 )
-              
+
 
 
 (defun random-prob ()
     ( / (+ (random 100) 1) 100.0)
 )
-    
-    
+
+
 (defun simulated_annealing (problema)
     (let (
         (initial-solution)
@@ -368,48 +349,45 @@
         (tempo-inicio (get-universal-time))
         (tempo-max-primitido (* 4.5 60))
         (temp-min 10) ;minimo e' 10 para nao dar overflow em acceptance-probability
-        (alpha   0.95) 
+        (alpha   0.95)
         (x-current)
-        (x-new) 
+        (x-new)
         (cost-change)
         (acc_prob)
         (iterations 0)
         (nr-iter-per-temp 3)
         (temp-it-i 0 )
         )
-        
+
 
         (setf initial-solution (create-random-initial-solution problema tempo-inicio))
-        
+
         (setf x-current initial-solution)
-        (print "yoyomano")
-         (print (- (get-universal-time) tempo-inicio))
         (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (> temp temp-min)) do
-            (setf temp-it-i 0)  
+            (setf temp-it-i 0)
             (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (< temp-it-i nr-iter-per-temp)) do
                 (setf x-new (neighbour x-current problema))
                 (setf cost-change (- (calculate-state-cost x-new) (calculate-state-cost x-current)))
                 (cond ((<=  cost-change 0)
                             (setf x-current x-new)
                        )
-                       (t 
+                       (t
                             (setf acc_prob (acceptance-probability cost-change temp))
 
-                            (print "acc_prob:") (print acc_prob)
                             (if (> acc_prob (random-prob))
-                                    (progn 
+                                    (progn
                                         (setf x-current x-new)
                                     )
                              )
                         )
-                            
+
                 )
-                                   
+
                 (incf iterations)
                 (incf temp-it-i)
 
             )
-            
+
             (setf temp (* temp alpha))
 
         )
@@ -419,17 +397,18 @@
 )
 
 
-
-
-
-
-    
-    
-
 ;-------------------------------------------------------------------------
 ;---------------------------------FUNCS-----------------------------------
 ;-------------------------------------------------------------------------
+(defun get-memory ()
+  (let ((room (with-output-to-string (*standard-output*) (room))))
 
+  (setf room (read-from-string room t nil :start 281))
+  (setf room (string-trim "|" room))
+
+  (multiple-value-bind (x) (parse-integer (string-trim "K" room))
+
+  x)))
 
 (defun final-list (state)
   (let((shifts (state-shifts state)))
@@ -448,11 +427,12 @@
     (if (not (equalp (nth 0 (car tasks)) 'L1))
         (setf start-time (- start-time drive-duration)))
     (- (add-drive-duration? (nth 1 last-task) 'L1 (nth 3 last-task))
-       start-time)))
+       start-time)))    
 
 (defun create-shift (tasks)
    (make-shift :tasks tasks
-               :time-used (calc-shift-time tasks)))
+               :time-used (calc-shift-time tasks)
+               :meal-taken nil))
 
 (defun create-state (shifts toAssignTasks)
   (make-state :shifts shifts
@@ -471,46 +451,52 @@
                           (nth 0 t2)
                           (nth 3 t1))))
 
-(defun calc-1st-empty-space(last-task)
-  (let((1st-empty-space-start-time (- (nth 3 last-task)
-                                      max-shift))
-       (1st-empty-space (list 'L1 'L1 nil)))
-
-  (if (< 1st-empty-space-start-time 0)
-      (setf 1st-empty-space-start-time 0))
-
-    (nconc 1st-empty-space
-           (list 1st-empty-space-start-time))))
-
-(defun has-space-to-lunch (tasks)
-  (let* ((first-task (nth 0 tasks))
-        (tsks (copy-list tasks))
-        (tsks (cons (calc-1st-empty-space (nth (1- (length tsks)) tsks))
-                     tsks))
+(defun when-to-lunch (tasks)
+  (let ((tsks (copy-list tasks))
         (pos 0)
         (current)
         (next)
-        (shift-time 0))
+        (lunch-time))
 
-    (loop while (and (<= pos
-                        (- (length tsks) 2))
-                     (<= shift-time MAX-TIME-TIL-LUNCH)) do
+    (loop while (< pos (1- (length tsks))) do
         (setf current (nth pos tsks)
               next (nth (1+ pos) tsks)
               pos (1+ pos))
-        (setf shift-time (calc-shift-time (list first-task
-                                                next)))
+
         (if (>= (empty-space-two-tasks current
                                        next)
                 EAT-DURATION)
-            (return-from has-space-to-lunch 'T)))))
+            (if (> (- (nth 2 next) EAT-DURATION)
+                   MAX-TIME-TIL-BREAK)
+                (setf lunch-time (+ MAX-TIME-TIL-BREAK EAT-DURATION))
+              (setf lunch-time (nth 2 next)))))
 
-(defun can-lunch (shift)
-  (let ((correct 'T))
-    (if (> (shift-time-used shift)
-           max-time-til-lunch)
-        (setf correct (has-space-to-lunch (shift-tasks shift))))
-    (return-from can-lunch correct)))
+    lunch-time))
+
+(defun verify-breaks (shift)
+  (let* ((correct t)
+         (lunch-time)
+         (tasks (shift-tasks shift))
+         (last-task (nth (1- (length tasks)) tasks))
+         (drive-time 0))
+
+    (if (not (eq (nth 1 last-task) 'L1))
+        (setf drive-time drive-duration))
+    
+    (if (not (shift-meal-taken shift))
+        (if (> (- (shift-time-used shift) drive-time)
+                MAX-TIME-TIL-BREAK)
+            (progn
+              (setf lunch-time (when-to-lunch tasks))
+              
+              (if lunch-time
+                  (setf (shift-meal-taken shift) lunch-time)
+                (setf correct nil))))
+      (if (> (- (nth 3 last-task) (shift-meal-taken shift))
+                 MAX-TIME-TIL-BREAK)
+             (setf correct nil)))
+    
+    (return-from verify-breaks correct)))
 
 (defun is-intersected (task1 task2)
   (let ((task2-start-time (nth 2 task2))
@@ -531,34 +517,8 @@
 
     (if (and (not (is-intersected last-task new-task))
              (not (is-intersected new-task shift-end)))
-        (return-from fits-in-shift 'T))))
+        (return-from fits-in-shift t))))
 
-
-(defun copy-shift (shift-old)
-  (let ((shift-new (copy-structure shift-old))
-        (shift-tasks-copy))
-
-    (setf shift-tasks-copy (copy-list (shift-tasks shift-old)))
-
-    (setf (shift-tasks shift-new) shift-tasks-copy)
-
-    shift-new))
-
-(defun copy-state (state-old)
-  (let ((state-new (copy-structure state-old)) 
-        (shifts-new (mapcar #'copy-structure (state-shifts state-old)))
-        (to-assign-tasks-new (copy-list (state-to-assign-tasks state-old))))
-
-        ;copy each shift to new from the old
-    (loop for i from 0 to (- (list-length shifts-new) 1) do
-          (setf (nth i shifts-new) (copy-shift (nth i shifts-new))))
-
-    (setf (state-shifts state-new) shifts-new)
-
-    ;copy to to-assign-tasks
-    (setf (state-to-assign-tasks state-new) to-assign-tasks-new)
-
-    state-new))
 
 (defun sucessors (state)
   (let* ((state2 (copy-state state))
@@ -583,21 +543,18 @@
              (progn
                (add-task-to-shift next-task current-shift)
 
-               (if (can-lunch current-shift)
+               (if (verify-breaks current-shift)
                    (progn
                      (setf (nth pos (state-shifts stte)) current-shift)
                      (setf sucessors (nconc sucessors (list stte)))))))
-
          (incf pos))
 
    (if (= (length sucessors) 0)
-        (progn
-          (setf new-shift (create-shift (list next-task)))
-
-          (if (can-lunch new-shift)
-              (progn
-                (setf (state-shifts state2) (nconc (state-shifts state2) (list new-shift)))
-                (setf sucessors (list state2))))))
+       (progn
+         (setf new-shift (create-shift (list next-task)))
+         (verify-breaks new-shift)
+         (setf (state-shifts state2) (nconc (state-shifts state2) (list new-shift)))
+         (setf sucessors (list state2))))
 
    sucessors))
 
@@ -628,12 +585,12 @@
       (result))
 
        (cond ((string-equal strategy "melhor.abordagem")
-                ;TODO
+                (setf result (simulated_annealing problem))
               )
              ((string-equal strategy "a*.melhor.heuristica")
                 (setf (problema-heuristica problem) #'number-to-assign-tasks)
                 (setf (problema-custo problem) #'calculate-state-cost)
-                (setf result (last (car (procura problem "a*"))))              
+                (setf result (last (car (procura problem "a*"))))
              )
              ((string-equal strategy "a*.melhor.heuristica.alternativa")
                 (setf (problema-heuristica problem) #'number-hours-to-assign)
@@ -644,16 +601,18 @@
                 (setf result (multiplas-sondagens-iterativas problem))
               )
              ((string-equal strategy "ILDS")
-                (ILDS problem) ;TODO: change ILDS to return a state (that will be converted after this cond
+                (setf result (ILDS problem))
               )
              ((string-equal strategy "abordagem.alternativa")
                 (setf result (simulated_annealing problem))
               )
-             (t 
-                'Wrong)
+             (t
+              (return-from faz-afetacao 'Wrong))
         )
-    
+      
         ;convert to external representation
-        (setf result (final-list result))
+        ;(setf result (final-list result))
+        (print (length (final-list result)))
+        (print result)
     )
 )
