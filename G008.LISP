@@ -312,11 +312,12 @@
         (setf shift-tasks (remove-nth random-task-index shift-tasks))
 
          (cond ((equal shift-tasks nil)
-                    (setf shifts (remove-nth random-shift-index shifts))
+                    (setf shifts (remove-nth random-shift-index shifts)) ;delete shift if it becomes empty
                 )
                 (t
-                    (setf (shift-tasks random-shift) shift-tasks)
+                    (setf (shift-tasks random-shift) shift-tasks) 
                     (setf (shift-time-used random-shift) (calc-shift-time shift-tasks))
+                    (verify-breaks random-shift) ;needed to update meal-taken
                     (setf (nth random-shift-index shifts) random-shift)
                 )
          )
