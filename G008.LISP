@@ -297,8 +297,8 @@
         (sucessores)
         (gera-sucessores (car (problema-operadores problema)))
         )
-       
-        (setf random-shift-index (random (list-length shifts)))               
+
+        (setf random-shift-index (random (list-length shifts)))
         (setf random-shift (copy-shift (nth random-shift-index shifts)))
 
         (setf shift-tasks (copy-list (shift-tasks random-shift)))
@@ -308,7 +308,7 @@
 
         (setf (state-to-assign-tasks new-incomplete-state) (push random-task (state-to-assign-tasks new-incomplete-state)))
 
-     
+
         (setf shift-tasks (remove-nth random-task-index shift-tasks))
 
          (cond ((equal shift-tasks nil)
@@ -316,8 +316,8 @@
                 )
                 (t
                     (setf (shift-tasks random-shift) shift-tasks)
-                    (setf (shift-time-used random-shift) (calc-shift-time shift-tasks)) 
-                    (setf (nth random-shift-index shifts) random-shift) 
+                    (setf (shift-time-used random-shift) (calc-shift-time shift-tasks))
+                    (setf (nth random-shift-index shifts) random-shift)
                 )
          )
 
@@ -427,7 +427,7 @@
     (if (not (equalp (nth 0 (car tasks)) 'L1))
         (setf start-time (- start-time drive-duration)))
     (- (add-drive-duration? (nth 1 last-task) 'L1 (nth 3 last-task))
-       start-time)))    
+       start-time)))
 
 (defun create-shift (tasks)
    (make-shift :tasks tasks
@@ -482,20 +482,20 @@
 
     (if (not (eq (nth 1 last-task) 'L1))
         (setf drive-time drive-duration))
-    
+
     (if (not (shift-meal-taken shift))
         (if (> (- (shift-time-used shift) drive-time)
                 MAX-TIME-TIL-BREAK)
             (progn
               (setf lunch-time (when-to-lunch tasks))
-              
+
               (if lunch-time
                   (setf (shift-meal-taken shift) lunch-time)
                 (setf correct nil))))
       (if (> (- (nth 3 last-task) (shift-meal-taken shift))
                  MAX-TIME-TIL-BREAK)
              (setf correct nil)))
-    
+
     (return-from verify-breaks correct)))
 
 (defun is-intersected (task1 task2)
@@ -609,7 +609,7 @@
              (t
               (return-from faz-afetacao 'Wrong))
         )
-      
+
         ;convert to external representation
         ;(setf result (final-list result))
         (print (length (final-list result)))
