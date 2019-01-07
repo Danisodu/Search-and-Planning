@@ -35,7 +35,6 @@
 ;---------------------------------HEURISTICS------------------------------
 ;-------------------------------------------------------------------------
 
-
 (defun number-to-assign-tasks (state)
   (length (state-to-assign-tasks state)))
 
@@ -55,30 +54,11 @@
 ;------------------------------ALGORITHMS---------------------------------
 ;-------------------------------------------------------------------------
 
-(defun verify-breaks (shift)
-  (let* ((correct t)
-         (lunch-time)
-         (tasks (shift-tasks shift))
-         (last-task (nth (1- (length tasks)) tasks))
-         (drive-time 0))
 
-    (if (not (eq (nth 1 last-task) 'L1))
-        (setf drive-time drive-duration))
-
-    (if (not (shift-meal-taken shift))
-        (if (> (- (shift-time-used shift) drive-time)
-                MAX-TIME-TIL-BREAK)
-            (progn
-              (setf lunch-time (when-to-lunch tasks))
-
-              (if lunch-time
-                  (setf (shift-meal-taken shift) lunch-time)
-                (setf correct nil))))
-      (if (> (- (nth 3 last-task) (shift-meal-taken shift))
-                 MAX-TIME-TIL-BREAK)
-             (setf correct nil)))
-
-    (return-from verify-breaks correct)))
+(defun amend-break (shift)
+  (if (<= (shift-time-used shift)
+          MAX-TIME-TIL-BREAK)
+      (setf (shift-meal-taken shift) nil)))
 
 (defun copy-shift (shift-old)
   (let ((shift-new (copy-structure shift-old))
@@ -342,7 +322,7 @@
                 (t
                     (setf (shift-tasks random-shift) shift-tasks) 
                     (setf (shift-time-used random-shift) (calc-shift-time shift-tasks))
-                    (verify-breaks random-shift) ;needed to update meal-taken
+                    (amend-break random-shift) ;needed to update meal-taken
                     (setf (nth random-shift-index shifts) random-shift)
                 )
          )
@@ -492,14 +472,9 @@
         (if (>= (empty-space-two-tasks current
                                        next)
                 EAT-DURATION)
-            (if (> (- (nth 2 next) EAT-DURATION)
-                   MAX-TIME-TIL-BREAK)
-                (setf lunch-time (+ MAX-TIME-TIL-BREAK EAT-DURATION))
-              (setf lunch-time (nth 2 next)))))
+              (setf lunch-time (nth 2 next))))
 
     lunch-time))
-
-
 
 (defun is-intersected (task1 task2)
   (let ((task2-start-time (nth 2 task2))
@@ -516,12 +491,46 @@
 (defun fits-in-shift (new-task tasks)
   (let* ((last-task (nth (1- (length tasks)) tasks))
          (first-task (nth 0 tasks))
-         (shift-end (list 'L1 'L1 (+ (nth 2 first-task) MAX-SHIFT) nil)))
+         (shift-end)
+         (drive-time 0))
+
+    (if (not (eq (nth 0 first-task) 'L1))
+        (setf drive-time DRIVE-DURATION))
+        
+    (setf shift-end (list 'L1 'L1 (+ (- (nth 2 first-task) drive-time) MAX-SHIFT) nil))
 
     (if (and (not (is-intersected last-task new-task))
              (not (is-intersected new-task shift-end)))
         (return-from fits-in-shift t))))
 
+
+(defun verify-breaks (shift)
+  (let* ((correct t)
+         (lunch-time)
+         (tasks (shift-tasks shift))
+         (last-task (nth (1- (length tasks)) tasks))
+         (drive-time 0)
+         (end-time (nth 3 last-task)))
+
+    (if (not (eq (nth 1 last-task) 'L1))
+        (setf drive-time (+ end-time DRIVE-DURATION)))
+
+    (if (not (shift-meal-taken shift))
+        (if (> (shift-time-used shift) MAX-TIME-TIL-BREAK)
+            (progn
+              (setf lunch-time (when-to-lunch tasks))
+
+              (if lunch-time
+                  (setf (shift-meal-taken shift) lunch-time)
+                (setf correct nil)))))
+
+    (if (shift-meal-taken shift)
+        (if (> (- (+ end-time drive-time)
+                  (shift-meal-taken shift))
+               MAX-TIME-TIL-BREAK)
+            (setf correct nil)))
+
+    (return-from verify-breaks correct)))
 
 (defun sucessors (state)
   (let* ((state2 (copy-state state))
@@ -614,8 +623,9 @@
         )
 
         ;convert to external representation
-        ;(setf result (final-list result))
-        (print (length (final-list result)))
-        (print result)
+(print (length (final-list result)))
+        (setf result (final-list result))
+        
+        ;(print result)
     )
 )
