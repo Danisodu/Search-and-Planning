@@ -51,14 +51,8 @@
 
 
 ;-------------------------------------------------------------------------
-;------------------------------ALGORITHMS---------------------------------
+;-------------------------REDEFINED FUNCTIONS-----------------------------
 ;-------------------------------------------------------------------------
-
-
-(defun amend-break (shift)
-  (if (<= (shift-time-used shift)
-          MAX-TIME-TIL-BREAK)
-      (setf (shift-meal-taken shift) nil)))
 
 (defun copy-shift (shift-old)
   (let ((shift-new (copy-structure shift-old))
@@ -90,12 +84,77 @@
 ;------------------A*---------------------
 ;-----------------------------------------
 
-;;;re-defining calcula-novo-g from procura.lisp
 (defun calcula-novo-g (estado no-pai custo-transicao)
   "Calcula o novo valor de g para estado, sendo no-pai o seu pai."
     (declare (ignore no-pai) (ignore custo-transicao))
 
     (calculate-state-cost estado))
+
+
+(defun problema-gera-sucessores (problema estado start-time)
+  (let ((sucessores nil))
+    (dolist (operador (problema-operadores problema))
+      (setf sucessores
+	(nconc (funcall operador estado start-time)
+	       sucessores)))
+    (incf *nos-expandidos*)
+    (incf *nos-gerados* (length sucessores))
+    sucessores))
+
+(defun espaco-expande-no (espaco no start-time)
+  "Expande o no recebido no espaco, actualizando a estrutura do
+  espaco."
+  ;; Comecamos por gerar todos os sucessores do estado correspondente
+  ;; ao no recebido
+  (let ((sucessores (problema-gera-sucessores (espaco-problema espaco)
+					      (no-estado no)
+                                              start-time)))
+    ;; O no ja foi expandido, por isso passa para os expandidos
+    (junta-no-expandido espaco no)
+    
+    ;; Finalmente, juntamos aos abertos os nos cujos estados ainda nao
+    ;; existem no espaco (os nos mais recentes vao para o fim da
+    ;; lista)
+    (junta-nos-gerados espaco
+		       (cria-nos-sucessores espaco no sucessores))))
+
+(defun procura-com-espaco (problema espaco)
+  
+  (let ((objectivo? (problema-objectivo? problema))
+        (start-time (get-universal-time)))
+    (loop
+     
+     (if (>= (- (get-universal-time) start-time)
+             MAX-TIME)
+         (return nil))
+
+      ;; Quando nao temos mais nos e porque ja exploramos todo o
+      ;; espaco e nao encontramos a solucao (nao existe)
+      (when (espaco-vazio? espaco)
+	(return nil))
+      
+      ;; Vamos considerar o no gerado mais antigo para termos uma
+      ;; procura em largura primeiro
+      (let ((proximo-no (espaco-proximo-no espaco)))
+
+	;; Se atingimos a solucao paramos e devolvemos os estados no
+	;; caminho 
+	(when (funcall objectivo? (no-estado proximo-no))
+	  (return (da-caminho proximo-no)))
+	
+	;; Caso contrario, devemos expandir o no
+	(espaco-expande-no espaco proximo-no start-time)))))
+
+
+;-------------------------------------------------------------------------
+;------------------------------ALGORITHMS---------------------------------
+;-------------------------------------------------------------------------
+
+
+(defun amend-break (shift)
+  (if (<= (shift-time-used shift)
+          MAX-TIME-TIL-BREAK)
+      (setf (shift-meal-taken shift) nil)))
 
 
 ;------------------------------------------
@@ -116,7 +175,7 @@
   (let ((best-discrepancy-res)
         (best-discrepancy-val most-positive-fixnum)
         (res)
-        (sucss (sort-by-heuristic-value (sucessors state))))
+        (sucss (sort-by-heuristic-value (sucessors state time))))
 
      (if (>= (- (get-universal-time) time)
              MAX-TIME)
@@ -192,7 +251,7 @@
 
 
         (if (funcall objectivo? estado)  (return-from 1-samp-aux estado))
-        (setf sucessores (funcall gera-sucessores  estado))
+        (setf sucessores (funcall gera-sucessores estado tempo-inicio))
 
 
         (cond  ((eq sucessores nil) nil) ;nao e' solucao e e´ folha retornamos nil
@@ -236,10 +295,9 @@
            (melhor-resultado nil)
            (melhor-resultado-custo)
            (resultado-sondagem nil)
-           (resultado-sondagem-custo)
-           (stop nil)
-           )
-           (loop named looper while (or (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (not stop)) do
+           (resultado-sondagem-custo))
+
+           (loop named looper while (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) do
 
                 (setf resultado-sondagem (sondagem-iterativa problema tempo-inicio))
 
@@ -291,7 +349,7 @@
 ;;  Receives a state and returns a state similar to the one received but with a small change
 ;;  The change in this case is one random task is moved to a random shift
 
-(defun neighbour(state problema)
+(defun neighbour(state problema start-time)
     (let ((shifts (mapcar #'copy-shift (state-shifts state)))
         (shift-tasks)
         (random-shift-index)
@@ -320,7 +378,7 @@
                     (setf shifts (remove-nth random-shift-index shifts)) ;delete shift if it becomes empty
                 )
                 (t
-                    (setf (shift-tasks random-shift) shift-tasks) 
+                    (setf (shift-tasks random-shift) shift-tasks)
                     (setf (shift-time-used random-shift) (calc-shift-time shift-tasks))
                     (amend-break random-shift) ;needed to update meal-taken
                     (setf (nth random-shift-index shifts) random-shift)
@@ -330,7 +388,7 @@
         (setf (state-shifts new-incomplete-state) shifts)
 
         ;Generate new possible sucessors, from the created "new-incomplete-state"
-        (setf sucessores (funcall gera-sucessores new-incomplete-state))
+        (setf sucessores (funcall gera-sucessores new-incomplete-state start-time))
 
         ;Select a random sucessor
         (nth (random (list-length sucessores)) sucessores)
@@ -372,7 +430,7 @@
         (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (> temp temp-min)) do
             (setf temp-it-i 0)
             (loop while (and (< (- (get-universal-time) tempo-inicio) tempo-max-primitido) (< temp-it-i nr-iter-per-temp)) do
-                (setf x-new (neighbour x-current problema))
+                (setf x-new (neighbour x-current problema tempo-inicio))
                 (setf cost-change (- (calculate-state-cost x-new) (calculate-state-cost x-current)))
                 (cond ((<=  cost-change 0)
                             (setf x-current x-new)
@@ -457,6 +515,14 @@
                           (nth 0 t2)
                           (nth 3 t1))))
 
+(defun get-start-time (task)
+  (let ((start-time (nth 2 task)))
+
+  (if (not (eq (nth 0 task) 'L1))
+      (setf start-time (- start-time DRIVE-DURATION)))
+
+  start-time))
+
 (defun when-to-lunch (tasks)
   (let ((tsks (copy-list tasks))
         (pos 0)
@@ -472,7 +538,12 @@
         (if (>= (empty-space-two-tasks current
                                        next)
                 EAT-DURATION)
-              (setf lunch-time (nth 2 next))))
+            (progn
+              (if (not (eq (nth 1 current) (nth 0 next)))
+                  (if (> (+ (nth 3 current) DRIVE-DURATION)
+                         (+ (get-start-time (car tasks)) MAX-TIME-TIL-BREAK))
+                      (setf lunch-time (- (nth 2 next) DRIVE-DURATION)))
+                (setf lunch-time (nth 2 next))))))
 
     lunch-time))
 
@@ -491,13 +562,9 @@
 (defun fits-in-shift (new-task tasks)
   (let* ((last-task (nth (1- (length tasks)) tasks))
          (first-task (nth 0 tasks))
-         (shift-end)
-         (drive-time 0))
+         (shift-end))
 
-    (if (not (eq (nth 0 first-task) 'L1))
-        (setf drive-time DRIVE-DURATION))
-        
-    (setf shift-end (list 'L1 'L1 (+ (- (nth 2 first-task) drive-time) MAX-SHIFT) nil))
+    (setf shift-end (list 'L1 'L1 (+ (get-start-time first-task) MAX-SHIFT) nil))
 
     (if (and (not (is-intersected last-task new-task))
              (not (is-intersected new-task shift-end)))
@@ -532,7 +599,7 @@
 
     (return-from verify-breaks correct)))
 
-(defun sucessors (state)
+(defun sucessors (state start-time)
   (let* ((state2 (copy-state state))
          (next-task (pop (state-to-assign-tasks state2)))
          (current-shift)
@@ -545,8 +612,9 @@
    (if (null next-task) (return-from sucessors nil))
 
    (loop while (and (< pos (length shifts))
-                    (< (length sucessors) MAX-SUCESSORS)) do
-
+                    (< (length sucessors) MAX-SUCESSORS)
+                    (< (- (get-universal-time) start-time) MAX-TIME)) do
+         
          (setf current-shift (copy-shift (nth pos shifts))
                stte (copy-state state2))
 
@@ -595,7 +663,7 @@
                                :objectivo? #'is-goal
                                :estado= #'equality))
       (result))
-
+   
        (cond ((string-equal strategy "melhor.abordagem")
                 (setf result (simulated_annealing problem))
               )
@@ -621,11 +689,11 @@
              (t
               (return-from faz-afetacao 'Wrong))
         )
-
+       
         ;convert to external representation
-(print (length (final-list result)))
-        (setf result (final-list result))
-        
-        ;(print result)
-    )
+       
+       (if result
+           (setf result (final-list result)))
+
+    result)
 )
